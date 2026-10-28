@@ -1,0 +1,52 @@
+{
+  "name": "context-preload-skill",
+  "version": "0.1.0",
+  "description": "Route what an AI agent reads: declare flows in routing-context-flow.md and load only the files each task needs.",
+  "type": "module",
+  "bin": {
+    "context-preload": "./bin/context-preload.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "editor",
+    "scripts",
+    "docs",
+    "schema",
+    "examples",
+    "SKILL.md",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BruceGitHub/context-preload-skill.git"
+  },
+  "bugs": {
+    "url": "https://github.com/BruceGitHub/context-preload-skill/issues"
+  },
+  "homepage": "https://github.com/BruceGitHub/context-preload-skill#readme",
+  "scripts": {
+    "test": "node --test",
+    "build:editor": "node scripts/build-editor.mjs",
+    "validate:examples": "node bin/context-preload.mjs validate routing-context-flow.md && node bin/context-preload.mjs validate examples/minimal-routing-context-flow.md",
+    "check": "npm run build:editor && npm run validate:examples && npm test"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "context",
+    "skill",
+    "opencode",
+    "claude-code",
+    "routing",
+    "llm",
+    "prompt-engineering"
+  ],
+  "author": "BruceGitHub",
+  "license": "MIT"
+}

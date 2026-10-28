@@ -1,0 +1,8 @@
+node_modules/
+!tests/fixtures/repo/node_modules/
+!tests/fixtures/repo/node_modules/**
+.DS_Store
+*.log
+coverage/
+.env
+.env.*

@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/BruceGitHub/context-preload-skill/schema/routing-context-flow.schema.json",
+  "title": "context-preload routing model",
+  "description": "The in-memory model produced by parsing a routing-context-flow.md file. The Markdown file remains the source of truth; this schema documents the shape used by the CLI, the resolver and the editor.",
+  "$comment": "Run `context-preload resolve <flow> --json` to inspect a resolved flow, or import { parseFlowFile } from src/crf-core.mjs to get this model.",
+  "type": "object",
+  "required": ["meta", "global", "flows"],
+  "additionalProperties": false,
+  "properties": {
+    "meta": { "$ref": "#/$defs/meta" },
+    "global": { "$ref": "#/$defs/global" },
+    "flows": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/flow" }
+    }
+  },
+  "$defs": {
+    "meta": {
+      "type": "object",
+      "required": ["crf", "name", "description", "defaultBudget", "root"],
+      "additionalProperties": false,
+      "properties": {
+        "crf": {
+          "type": "integer",
+          "const": 1,
+          "description": "Routing language version."
+        },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "defaultBudget": {
+          "type": "string",
+          "description": "Human budget such as 60k, 120000 or 1.5M.",
+          "examples": ["60k", "120000", "1.5M"]
+        },
+        "root": {
+          "type": "string",
+          "description": "Directory paths are relative to. Empty means the folder containing the routing file."
+        }
+      }
+    },
+    "global": {
+      "type": "object",
+      "required": ["ignore", "rules", "readOrder", "budget", "root"],
+      "additionalProperties": false,
+      "properties": {
+        "ignore": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Globs no flow may read. Applied before flow-level skip."
+        },
+        "rules": {
+          "type": "string",
+          "description": "Markdown rules valid for every flow."
+        },
+        "readOrder": {
+          "type": "string",
+          "description": "Free-form guidance on reading order."
+        },
+        "budget": {
+          "type": "string",
+          "description": "Default budget, overridden by a flow budget."
+        },
+        "root": {
+          "type": "string",
+          "description": "Root override. Empty means the folder containing the routing file."
+        }
+      }
+    },
+    "flow": {
+      "type": "object",
+      "required": [
+        "id",
+        "description",
+        "triggers",
+        "priority",
+        "includes",
+        "read",
+        "optional",
+        "skip",
+        "budget",
+        "rules",
+        "steps",
+        "doneWhen"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]*$"
+        },
+        "description": { "type": "string" },
+        "triggers": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Phrases used to infer the flow from a task description."
+        },
+        "priority": {
+          "type": "integer",
+          "description": "Tie-breaker among inferred flows. Higher wins."
+        },
+        "includes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Flow ids merged before this flow."
+        },
+        "read": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/readEntry" }
+        },
+        "optional": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/readEntry" }
+        },
+        "skip": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Globs removed from this flow after expansion."
+        },
+        "budget": {
+          "type": "string",
+          "description": "Soft token budget. Empty means inherit."
+        },
+        "rules": {
+          "type": "string",
+          "description": "Markdown constraints for the flow."
+        },
+        "steps": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "doneWhen": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Completion criteria."
+        }
+      }
+    },
+    "readEntry": {
+      "type": "object",
+      "required": ["path", "note"],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Relative path or glob. Supports *, **, ?, {a,b} and [abc]."
+        },
+        "note": {
+          "type": "string",
+          "description": "Why the file matters. Written after a | separator."
+        }
+      }
+    }
+  }
+}

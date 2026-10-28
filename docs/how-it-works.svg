@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="380" viewBox="0 0 960 380" role="img" aria-labelledby="title desc">
+  <title id="title">context-preload routes a task to one flow, and the flow to a small set of files</title>
+  <desc id="desc">A prompt selects the review flow in routing-context-flow.md; only that flow's files are loaded, while coding, debug and docs stay out of the context.</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#3ddc97"/>
+    </marker>
+    <style>
+      .card { fill: #111823; stroke: #223041; stroke-width: 1; }
+      .inner { fill: #0d131b; stroke: #223041; stroke-width: 1; }
+      .label { fill: #8c9aac; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10.5px; letter-spacing: 1.4px; }
+      .mono { fill: #e7eef6; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+      .small { fill: #8c9aac; font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 11.5px; }
+      .chip { fill: #0d131b; stroke: #223041; }
+      .chip-text { fill: #8c9aac; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+      .active { fill: #3ddc97; }
+      .active-text { fill: #04140d; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; font-weight: 700; }
+      .accent { fill: #3ddc97; }
+    </style>
+  </defs>
+
+  <rect x="0.5" y="0.5" width="959" height="379" rx="16" fill="#0d1117" stroke="#223041"/>
+
+  <!-- 1. prompt -->
+  <text x="48" y="62" class="label">PROMPT</text>
+  <rect x="48" y="76" width="232" height="216" rx="12" class="card"/>
+  <circle cx="68" cy="102" r="4" class="accent"/>
+  <text x="80" y="107" class="small">task + intent</text>
+
+  <text x="68" y="148" class="mono">fai la review del</text>
+  <text x="68" y="170" class="mono">branch feature/dd-100</text>
+  <text x="68" y="192" class="mono">usando <tspan class="accent">context-preload</tspan></text>
+
+  <line x1="68" y1="216" x2="260" y2="216" stroke="#223041" stroke-dasharray="3 4"/>
+  <text x="68" y="243" class="small">explicit flow or inference</text>
+  <text x="68" y="263" class="small">from the task</text>
+
+  <!-- arrow -->
+  <line x1="292" y1="184" x2="338" y2="184" stroke="#3ddc97" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="292" y="172" class="label">SELECT</text>
+
+  <!-- 2. routing file -->
+  <text x="358" y="62" class="label">ROUTING FILE</text>
+  <rect x="358" y="76" width="272" height="240" rx="12" class="card"/>
+
+  <rect x="358" y="76" width="4" height="240" rx="2" class="accent"/>
+  <text x="382" y="105" class="mono">routing-context-flow.md</text>
+
+  <rect x="382" y="124" width="224" height="30" rx="7" class="active"/>
+  <text x="394" y="144" class="active-text">review</text>
+  <text x="572" y="144" text-anchor="end" class="active-text" opacity="0.65">←</text>
+
+  <rect x="382" y="162" width="224" height="30" rx="7" class="chip"/>
+  <text x="394" y="182" class="chip-text">coding</text>
+
+  <rect x="382" y="200" width="224" height="30" rx="7" class="chip"/>
+  <text x="394" y="220" class="chip-text">debug</text>
+
+  <rect x="382" y="238" width="224" height="30" rx="7" class="chip"/>
+  <text x="394" y="258" class="chip-text">docs</text>
+
+  <text x="382" y="294" class="small">one flow per task</text>
+
+  <!-- arrow -->
+  <line x1="648" y1="184" x2="694" y2="184" stroke="#3ddc97" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="648" y="172" class="label">LOAD</text>
+
+  <!-- 3. resolved reads -->
+  <text x="716" y="62" class="label">READS</text>
+  <rect x="716" y="76" width="208" height="240" rx="12" class="card"/>
+  <text x="738" y="105" class="mono accent">review · 4 files</text>
+
+  <text x="738" y="139" class="mono">docs/language.md</text>
+  <text x="738" y="164" class="mono">src/**/*.mjs</text>
+  <text x="738" y="189" class="mono">tests/**/*.mjs</text>
+  <text x="738" y="214" class="mono" opacity="0.45">tests/fixtures/**</text>
+  <text x="876" y="214" class="small" opacity="0.55">skip</text>
+
+  <line x1="738" y1="234" x2="902" y2="234" stroke="#223041"/>
+  <text x="738" y="258" class="small">~12.4k tokens</text>
+  <text x="738" y="280" class="small">budget 50k</text>
+
+  <text x="738" y="302" class="accent" style="fill:#3ddc97;font-family:ui-sans-serif,sans-serif;font-size:11.5px">everything else stays out</text>
+
+  <!-- other flows, faded -->
+  <rect x="358" y="330" width="566" height="30" rx="8" fill="none" stroke="#223041" stroke-dasharray="4 5"/>
+  <text x="372" y="350" class="small" opacity="0.75">coding, debug, docs, release… are never added to the context</text>
+</svg>
