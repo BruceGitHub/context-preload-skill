@@ -9,9 +9,16 @@ no build step at runtime.
 ## Open it
 
 ```bash
-context-preload editor            # prints the path
-context-preload editor --open     # opens it in the default browser
+context-preload editor                        # prints the path
+context-preload editor --open                 # opens the blank editor
+context-preload editor path/to/routing.md     # opens that file
+context-preload editor path/to/routing.md --no-open   # just print the temp path
 ```
+
+Opening a file creates a temporary HTML copy with the content embedded, because
+a browser cannot read local filesystem paths directly. The copy lives in the
+system temp directory; the original file is not modified. Use **Download** to
+save your changes back to disk.
 
 Or open `editor/index.html` with your browser. On Linux:
 
@@ -19,34 +26,59 @@ Or open `editor/index.html` with your browser. On Linux:
 xdg-open editor/index.html
 ```
 
-## What it does
+## Two modes
 
-- **Edit the global section** — name, description, budget, root, ignore list,
-  read order, global rules.
-- **Edit flows** — id, description, triggers, priority, includes, read,
-  optional, skip, steps, rules, done when.
-- **Preview the canonical Markdown** live, on the right.
-- **Validate structure live** (ids, includes, cycles, budgets, absolute paths).
-  Path existence is checked by `context-preload validate`, because the browser
-  cannot read your repository.
-- **Import** an existing `routing-context-flow.md` (button or drag & drop).
-- **Download** the generated file with the name you choose.
+### Visual
+
+Forms for the global section and for each flow:
+
+- global: name, description, budget, root, ignore list, read order, rules;
+- flow: id, description, triggers, priority, includes, read, optional, skip,
+  steps, rules, done when;
+- duplicate, reorder and delete flows from the sidebar.
+
+The right pane previews the canonical Markdown live, and structure is validated
+as you type (ids, includes, cycles, budgets, absolute paths). Path existence is
+checked by `context-preload validate`, because the browser cannot read your
+repository.
+
+### Free text
+
+Press **Raw** to edit the whole file as plain Markdown. This is the mode for
+prose routing files:
+
+```markdown
+When I am doing a review, read these files:
+- `docs/language.md`
+- `src/**/*.mjs`
+- `tests/**/*.test.mjs`
+
+Skip `tests/fixtures/**`. Report only concrete problems, with file and line.
+```
+
+The skill reads this file as instructions. Structured `## Flow:` sections are
+optional; they unlock glob expansion, includes, budgets and validation in the
+CLI.
+
+Switching back to **Visual** parses the text. If the file has no structured
+flows, or if normalisation would drop free-form prose, the editor warns before
+discarding anything. When in doubt, stay in Raw mode and download the file as
+written.
+
+## Other features
+
+- **Import** an existing routing file (button or drag & drop), in either mode.
+- **Download** the current content with the name you choose.
 - **Copy** the Markdown to the clipboard.
 - **Autosave** a local draft, restored the next time you open the page.
-- **Duplicate, reorder and delete** flows from the flow list.
 - **Ctrl/⌘+S** downloads the current file.
-
-Everything the editor writes is canonical: the same shape described in
-[language.md](language.md#6-canonical-form). Importing and exporting without
-changes is lossless in terms of model, though comments and prose outside the
-recognised blocks are not preserved.
 
 ## Anatomy
 
 | File | Role |
 | --- | --- |
 | `editor/template.html` | Layout, styles and placeholders. **Edit this**, not the generated file. |
-| `editor/editor.js` | UI logic: forms, import/export, autosave. |
+| `editor/editor.js` | UI logic: forms, modes, import/export, autosave. |
 | `editor/index.html` | Generated single file, committed so it works from `file://`. |
 | `scripts/build-editor.mjs` | Inlines `src/crf-core.mjs` + `editor/editor.js` into the template. |
 

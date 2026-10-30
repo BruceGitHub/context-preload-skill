@@ -7,7 +7,9 @@
  */
 
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import process from 'node:process';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -574,17 +576,66 @@ function commandInit() {
   out(dim('Then: context-preload list && context-preload show review'));
 }
 
+function openInBrowser(target) {
+  const opener =
+    process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'cmd' : 'xdg-open';
+  const args = process.platform === 'win32' ? ['/c', 'start', '', target] : [target];
+  const child = spawn(opener, args, { stdio: 'ignore', detached: true });
+  child.on('error', () => out(dim('Could not open a browser; open the path above manually.')));
+  child.unref();
+}
+
+function buildEditorForFile(editorPath, filePath, text) {
+  const html = fs.readFileSync(editorPath, 'utf8');
+  const payload = JSON.stringify({
+    fileName: path.basename(filePath),
+    path: filePath,
+    text,
+  })
+    .replace(/</g, '\\u003c')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+
+  const marker = '<script type="module">';
+  const index = html.indexOf(marker);
+  if (index === -1) fail('editor build is invalid: module script not found');
+
+  const bootstrap = `<script>window.__CRF_BOOTSTRAP__ = ${payload};</script>\n`;
+  return `${html.slice(0, index)}${bootstrap}${html.slice(index)}`;
+}
+
+function editorForFile(editorPath, file) {
+  const absolute = path.resolve(file);
+  if (!fs.existsSync(absolute)) fail(`routing file not found: ${file}`);
+  if (!fs.statSync(absolute).isFile()) fail(`not a file: ${file}`);
+
+  const text = fs.readFileSync(absolute, 'utf8');
+  const html = buildEditorForFile(editorPath, absolute, text);
+  const directory = path.join(os.tmpdir(), 'context-preload-editor');
+  fs.mkdirSync(directory, { recursive: true });
+
+  const digest = crypto
+    .createHash('sha1')
+    .update(absolute)
+    .update('\0')
+    .update(text)
+    .digest('hex')
+    .slice(0, 12);
+  const target = path.join(directory, `editor-${digest}.html`);
+  fs.writeFileSync(target, html, 'utf8');
+  return target;
+}
+
 function commandEditor() {
   const editorPath = path.resolve(HERE, '..', 'editor', 'index.html');
   if (!fs.existsSync(editorPath)) fail(`editor not found at ${editorPath}`);
-  out(displayPath(editorPath));
-  if (FLAGS.has('open')) {
-    const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'cmd' : 'xdg-open';
-    const args = process.platform === 'win32' ? ['/c', 'start', '', editorPath] : [editorPath];
-    const child = spawn(opener, args, { stdio: 'ignore', detached: true });
-    child.on('error', () => out(dim('Could not open a browser; open the path above manually.')));
-    child.unref();
-  }
+
+  const file = OPTIONS.file ?? POSITIONAL[0];
+  const target = file ? editorForFile(editorPath, file) : editorPath;
+  out(displayPath(target));
+
+  const shouldOpen = FLAGS.has('open') || (Boolean(file) && !FLAGS.has('no-open'));
+  if (shouldOpen) openInBrowser(target);
 }
 
 function commandHelp() {
@@ -602,7 +653,7 @@ ${bold('Commands')}
   pick "<task>"              Infer the best flow from a task description
   interactive [file]         Menu: choose a flow and show its context
   init [file]                Create a starter routing-context-flow.md
-  editor [--open]            Print (and optionally open) the visual editor
+  editor [file] [--open]     Open the visual editor, optionally with a routing file
 
 ${bold('Options')}
   --file <path>              Routing file (default: nearest routing-context-flow.md)
@@ -616,6 +667,7 @@ ${bold('Options')}
   --no-paths                 Skip path checks (validate)
   --strict                   Exit 1 on warnings too (validate)
   --force                    Overwrite an existing file (init)
+  --no-open                  Do not launch a browser (editor)
   --no-color                 Disable colors
 
 ${bold('Examples')}

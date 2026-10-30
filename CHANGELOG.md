@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Free-text routing files: a routing file can be plain prose, and the skill
+  follows it directly. Structured flows remain optional.
+- `context-preload editor <file>` opens the visual editor with a routing file
+  loaded (via a temporary HTML copy).
+- A **Raw** mode in the editor for editing free-text routing files without
+  losing prose.
+
+### Fixed
+
+- English copy and identifiers across the CLI, editor and documentation.
+
 ## [0.1.0] — 2026-10-28
 
 ### Added

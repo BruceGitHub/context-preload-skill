@@ -145,15 +145,19 @@ time.
 ## Visual editor
 
 `editor/index.html` is a single, offline page: forms for global rules and
-flows, live canonical Markdown preview, structural validation, import by file
-or drag & drop, download, copy, and a local autosave draft.
+flows, a free-text mode for prose routing files, live canonical Markdown
+preview, structural validation, import by file or drag & drop, download, copy,
+and a local autosave draft.
 
 ```bash
-context-preload editor --open
+context-preload editor --open                 # blank editor
+context-preload editor path/to/routing.md     # opens a copy with the file loaded
 ```
 
-No CDN, no server, no dependencies. It shares the parser with the CLI, so what
-you see is what `validate` sees. See [docs/editor.md](docs/editor.md).
+Opening a file creates a temporary HTML copy with the content embedded, because
+a browser cannot read local paths directly. No CDN, no server, no dependencies.
+It shares the parser with the CLI, so what you see is what `validate` sees. See
+[docs/editor.md](docs/editor.md).
 
 ## Install as a skill
 
@@ -192,14 +196,14 @@ The skill uses the CLI when it is on `PATH`, otherwise
 | `context-preload pick "<task>"` | Infer the best flow from a task description. |
 | `context-preload interactive` | Numbered menu to choose a flow. |
 | `context-preload init [file]` | Write a starter routing file. |
-| `context-preload editor [--open]` | Print or open the visual editor. |
+| `context-preload editor [file] [--open]` | Open the visual editor, optionally with a routing file. |
 
 Useful flags: `--file`, `--root`, `--json`, `--pretty`, `--all`,
-`--no-check`, `--no-paths`, `--strict`, `--no-color`.
+`--no-check`, `--no-paths`, `--strict`, `--no-color`, `--no-open`.
 
 ## The routing language
 
-A flow is a Markdown section with list keys:
+In the structured mode, a flow is a Markdown section with list keys:
 
 | Key | Purpose |
 | --- | --- |
@@ -221,6 +225,23 @@ accepted (`use when`, `files`, `exclude`, `rule`, `step`…).
 
 Full specification: [docs/language.md](docs/language.md).
 
+### Free-text routing
+
+For a quick start, the file can be plain prose. This is a valid routing file:
+
+```markdown
+When I am doing a review, read these files:
+- `docs/language.md`
+- `src/**/*.mjs`
+- `tests/**/*.test.mjs`
+
+Skip `tests/fixtures/**`. Report only concrete problems, with file and line.
+```
+
+The skill reads it directly. Structured flows add deterministic glob
+expansion, includes, budgets and validation; the CLI only expands structured
+flows. See [examples/free-text-routing-context-flow.md](examples/free-text-routing-context-flow.md).
+
 ## Repository layout
 
 ```
@@ -239,7 +260,7 @@ Full specification: [docs/language.md](docs/language.md).
 │   └── index.html                # generated, offline, committed
 ├── scripts/build-editor.mjs      # inlines the core into the editor
 ├── routing-context-flow.md       # this repository routes itself
-├── examples/                     # starter and minimal routing files
+├── examples/                     # structured and free-text routing examples
 ├── schema/                       # JSON Schema of the parsed model
 ├── docs/                         # language, editor, diagram
 └── tests/                        # node:test, fixtures, CLI smoke tests
@@ -257,18 +278,6 @@ npm run check            # all of the above
 Zero runtime dependencies. The core is pure ESM with no Node APIs, which is why
 the same code runs in the CLI and in the browser. CI runs the tests on Node 20
 and 22 and fails if `editor/index.html` is stale.
-
-## Design notes
-
-- **Markdown, not YAML.** The routing file is read by an LLM first and by a
-  parser second. Headings and lists are legible to both, and comments survive.
-- **The file is the interface.** The skill, the CLI and the editor all consume
-  the same artifact; nothing is configured elsewhere.
-- **Deterministic expansion.** Globs, includes, skip and duplicates are
-  resolved by code, not by the model's imagination.
-- **The skill does the task.** Routing is a pre-step; the output is still a
-  review, a patch or an explanation.
-- **Small surface.** No daemon, no database, no tokens accounting service.
 
 ## License
 

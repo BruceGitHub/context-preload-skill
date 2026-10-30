@@ -15,6 +15,10 @@ The language is a small, line-oriented dialect on top of Markdown. Everything
 outside the recognised blocks is ignored, so you can add comments and prose
 freely.
 
+The structured syntax is **optional**. A routing file can be plain prose; the
+skill reads it directly (see [§9](#9-free-text-routing-files)). Structured
+flows exist to let the CLI expand globs, validate paths and estimate tokens.
+
 ---
 
 ## 1. File shape
@@ -297,7 +301,26 @@ core:
 
 ---
 
-## 9. Multiple routing files
+## 9. Free-text routing files
+
+For a quick start, skip the keys and write prose:
+
+```markdown
+When I am doing a review, read these files:
+- `docs/language.md`
+- `src/**/*.mjs`
+- `tests/**/*.test.mjs`
+
+Skip `tests/fixtures/**`. Report only concrete problems, with file and line.
+```
+
+The skill reads the matching clause, follows the listed paths and constraints,
+then performs the task. Structured flows are optional: they add deterministic
+glob expansion, includes, budgets, de-duplication and validation. The CLI only
+resolves structured files; `validate` reports a warning when a file has no
+flows.
+
+## 10. Multiple routing files
 
 The skill accepts any file path, so you can keep one routing file per project,
 team or context:

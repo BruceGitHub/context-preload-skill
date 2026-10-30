@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -126,4 +127,19 @@ test('init creates a valid starter file', () => {
 test('editor prints a path', () => {
   const output = run(['editor']);
   assert.match(output, /editor\/index\.html/);
+});
+
+test('editor embeds a routing file passed as an argument', () => {
+  const output = run(['editor', FIXTURE, '--no-open']);
+  const target = output.trim().split('\n').pop();
+  assert.match(target, /context-preload-editor/);
+
+  try {
+    const html = fs.readFileSync(target, 'utf8');
+    assert.match(html, /window\.__CRF_BOOTSTRAP__/);
+    assert.match(html, /routing-context-flow\.md/);
+    assert.match(html, /Fixture global rule/);
+  } finally {
+    fs.unlinkSync(target);
+  }
 });

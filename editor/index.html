@@ -241,6 +241,7 @@
     transition: border-color 0.15s, box-shadow 0.15s;
   }
   .field textarea { resize: vertical; min-height: 62px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; line-height: 1.5; }
+  #raw-text { min-height: 62vh; }
   .field input::placeholder, .field textarea::placeholder { color: color-mix(in srgb, var(--muted) 65%, transparent); }
   .field input:focus, .field textarea:focus {
     outline: none;
@@ -380,6 +381,7 @@
     <input id="filename" class="filename" value="routing-context-flow.md" aria-label="Name of the file to download" spellcheck="false">
     <div class="spacer"></div>
     <div class="actions">
+      <button class="btn ghost" id="btn-mode" type="button" title="Edit the file as free text">Raw</button>
       <button class="btn ghost" id="btn-import" type="button">Import</button>
       <button class="btn ghost" id="btn-new" type="button">New</button>
       <button class="btn ghost" id="btn-copy" type="button">Copy</button>
@@ -1389,7 +1391,15 @@ const state = {
   model: starterModel(),
   selected: 'global',
   dirty: false,
+  raw: false,
+  rawText: '',
 };
+
+state.rawText = serializeFlowFile(state.model);
+
+function currentText() {
+  return state.raw ? state.rawText : serializeFlowFile(state.model);
+}
 
 /* ------------------------------------------------------------------ */
 /* Rendering                                                           */
@@ -1397,6 +1407,11 @@ const state = {
 
 function renderAll() {
   $('#filename').value = state.fileName;
+  $('#btn-mode').textContent = state.raw ? 'Visual' : 'Raw';
+  $('#btn-mode').title = state.raw
+    ? 'Switch to the structured editor'
+    : 'Edit the file as free text';
+  document.body.classList.toggle('is-raw', state.raw);
   renderSidebar();
   renderForm();
   renderPreview();
@@ -1405,13 +1420,13 @@ function renderAll() {
 
 function renderSidebar() {
   $('#flow-count').textContent = String(state.model.flows.length);
-  $('#btn-global').classList.toggle('active', state.selected === 'global');
+  $('#btn-global').classList.toggle('active', !state.raw && state.selected === 'global');
 
   $('#flow-list').innerHTML = state.model.flows
     .map(
       (flow) => `
       <li>
-        <button type="button" class="flow-item ${state.selected === flow.id ? 'active' : ''}"
+        <button type="button" class="flow-item ${!state.raw && state.selected === flow.id ? 'active' : ''}"
                 data-flow="${escAttr(flow.id)}">
           <span class="flow-id">${esc(flow.id)}</span>
           <span class="flow-desc">${esc(flow.description || 'no description')}</span>
@@ -1564,8 +1579,39 @@ function flowTemplate(flow) {
     </div>`;
 }
 
+function rawTemplate() {
+  return `
+    <div class="panel-head">
+      <div>
+        <h2>Free text</h2>
+        <p>The skill reads this file as instructions. Structured flows are optional.</p>
+      </div>
+    </div>
+    <div class="form-grid">
+      <label class="field full">
+        <span class="label">Routing file</span>
+        <textarea id="raw-text" rows="26" spellcheck="false">${esc(state.rawText)}</textarea>
+        <small>Example: <code>When I am doing a review, read these files:</code> followed by the list. Switch to <b>Visual</b> when the file uses <code>## Flow:</code> sections.</small>
+      </label>
+    </div>`;
+}
+
 function renderForm() {
   const panel = $('#form-panel');
+
+  if (state.raw) {
+    panel.innerHTML = rawTemplate();
+    const raw = $('#raw-text');
+    raw.addEventListener('input', () => {
+      state.rawText = raw.value;
+      state.dirty = true;
+      renderPreview();
+      renderStatus();
+      scheduleSave();
+    });
+    return;
+  }
+
   const flow = getFlow(state.model, state.selected);
 
   if (state.selected === 'global' || !flow) {
@@ -1586,36 +1632,49 @@ function renderForm() {
 
 function renderPreview() {
   const preview = $('#preview');
-  const text = serializeFlowFile(state.model);
+  const text = currentText();
   const scrollTop = preview.scrollTop;
   preview.textContent = text;
   preview.scrollTop = scrollTop;
 
-  const issues = validateModel(state.model);
+  const issues = state.raw
+    ? parseFlowFile(state.rawText).issues.filter((issue) => issue.level === 'error')
+    : validateModel(state.model);
   const errors = issues.filter((issue) => issue.level === 'error').length;
   const warnings = issues.filter((issue) => issue.level === 'warning').length;
 
   const badge = $('#issues-badge');
-  badge.textContent = errors
-    ? `${errors} error${errors === 1 ? 'e' : 'i'}${warnings ? ` · ${warnings} warning` : ''}`
-    : warnings
-      ? `${warnings} warning`
-      : 'no issues';
-  badge.className = `badge ${errors ? 'bad' : warnings ? 'warn' : 'ok'}`;
+  badge.textContent = state.raw
+    ? errors
+      ? `${errors} error${errors === 1 ? '' : 's'}`
+      : 'free text'
+    : errors
+      ? `${errors} error${errors === 1 ? '' : 's'}${warnings ? ` · ${warnings} warning` : ''}`
+      : warnings
+        ? `${warnings} warning`
+        : 'no issues';
+  badge.className = `badge ${errors ? 'bad' : state.raw ? 'ok' : warnings ? 'warn' : 'ok'}`;
 
-  $('#issues').innerHTML = issues.length
-    ? `<ul class="issues">${issues
-        .map(
-          (issue) =>
-            `<li class="${issue.level}"><strong>${issue.level === 'error' ? 'error' : 'warning'}</strong> ${esc(issue.message)}</li>`,
-        )
-        .join('')}</ul>`
-    : '<p class="muted">Valid structure. Paths are checked by <code>context-preload validate</code>.</p>';
+  if (!issues.length) {
+    $('#issues').innerHTML = state.raw
+      ? '<p class="muted">Free text: the skill interprets it directly. Use structured <code>## Flow:</code> sections if you want <code>context-preload validate</code> and glob expansion.</p>'
+      : '<p class="muted">Valid structure. Paths are checked by <code>context-preload validate</code>.</p>';
+    return;
+  }
+
+  $('#issues').innerHTML = `<ul class="issues">${issues
+    .map(
+      (issue) =>
+        `<li class="${issue.level}"><strong>${issue.level === 'error' ? 'error' : 'warning'}</strong> ${esc(issue.message)}</li>`,
+    )
+    .join('')}</ul>`;
 }
 
 function renderStatus() {
-  const lines = serializeFlowFile(state.model).split('\n').length;
-  $('#status-left').textContent = `${state.model.flows.length} flows · ${lines} lines`;
+  const lines = currentText().split('\n').length;
+  $('#status-left').textContent = state.raw
+    ? `free text · ${lines} lines`
+    : `${state.model.flows.length} flows · ${lines} lines`;
   $('#status-right').textContent = state.dirty ? 'draft updated' : 'ready';
 }
 
@@ -1770,7 +1829,7 @@ function onAction(event) {
 /* ------------------------------------------------------------------ */
 
 function download() {
-  const text = serializeFlowFile(state.model);
+  const text = currentText();
   const raw = state.fileName.trim() || 'routing-context-flow.md';
   const fileName = raw.toLowerCase().endsWith('.md') ? raw : `${raw}.md`;
   const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
@@ -1782,11 +1841,11 @@ function download() {
   link.click();
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  toast(`Scaricato ${fileName}`);
+  toast(`Downloaded ${fileName}`);
 }
 
 async function copyText() {
-  const text = serializeFlowFile(state.model);
+  const text = currentText();
   try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text);
@@ -1798,7 +1857,7 @@ async function copyText() {
       document.execCommand('copy');
       area.remove();
     }
-    toast('Markdown copiato');
+    toast('Markdown copied');
   } catch {
     toast('Copy unavailable: use Download');
   }
@@ -1807,20 +1866,31 @@ async function copyText() {
 async function importFile(file) {
   try {
     const text = await file.text();
-    importText(text, file.name);
+    loadFileText(text, file.name);
   } catch (error) {
     toast(`Import failed: ${error.message}`);
   }
 }
 
-function importText(text, name) {
+function loadFileText(text, name, message) {
   const { model, issues } = parseFlowFile(text);
   state.model = model;
+  state.rawText = text;
   if (name) state.fileName = name;
+
+  const hasProse = issues.some(
+    (issue) => issue.code === 'syntax.orphan' || issue.code === 'section.unknown',
+  );
+  state.raw = model.flows.length === 0 || hasProse;
   state.selected = model.flows[0]?.id ?? 'global';
   state.dirty = false;
   renderAll();
   scheduleSave();
+
+  if (message) {
+    toast(message);
+    return;
+  }
 
   const errors = issues.filter((issue) => issue.level === 'error').length;
   toast(
@@ -1830,9 +1900,48 @@ function importText(text, name) {
   );
 }
 
+function ensureVisualMode() {
+  if (!state.raw) return true;
+
+  const { model, issues } = parseFlowFile(state.rawText);
+  if (!model.flows.length) {
+    toast('No structured flows found; staying in free text mode');
+    return false;
+  }
+  if (issues.some((issue) => issue.level === 'error')) {
+    toast('Fix the errors in the free text first');
+    return false;
+  }
+  if (serializeFlowFile(model).trim() !== state.rawText.trim()) {
+    if (!confirm('Visual mode normalizes the file and may drop free-form text. Continue?')) {
+      return false;
+    }
+  }
+
+  state.model = model;
+  state.raw = false;
+  return true;
+}
+
+function toggleMode() {
+  if (!state.raw) {
+    state.rawText = serializeFlowFile(state.model);
+    state.raw = true;
+  } else if (ensureVisualMode()) {
+    state.selected = state.model.flows[0]?.id ?? 'global';
+  } else {
+    return;
+  }
+
+  renderAll();
+  scheduleSave();
+}
+
 function resetModel() {
   if (state.dirty && !confirm('Replace the current content with a new file?')) return;
   state.model = starterModel();
+  state.rawText = serializeFlowFile(state.model);
+  state.raw = false;
   state.fileName = 'routing-context-flow.md';
   state.selected = 'global';
   state.dirty = false;
@@ -1855,6 +1964,8 @@ function scheduleSave() {
           fileName: state.fileName,
           model: state.model,
           selected: state.selected,
+          raw: state.raw,
+          rawText: state.rawText,
           savedAt: Date.now(),
         }),
       );
@@ -1872,6 +1983,9 @@ function restoreDraft() {
     if (!data?.model || !Array.isArray(data.model.flows)) return false;
     state.model = data.model;
     state.fileName = data.fileName || state.fileName;
+    state.raw = Boolean(data.raw);
+    state.rawText =
+      typeof data.rawText === 'string' ? data.rawText : serializeFlowFile(state.model);
     state.selected =
       data.selected === 'global' || getFlow(state.model, data.selected)
         ? data.selected
@@ -1914,19 +2028,27 @@ function wire() {
   $('#btn-new').addEventListener('click', resetModel);
   $('#btn-download').addEventListener('click', download);
   $('#btn-copy').addEventListener('click', copyText);
+  $('#btn-mode').addEventListener('click', toggleMode);
 
   $('#btn-global').addEventListener('click', () => {
+    if (!ensureVisualMode()) return;
     state.selected = 'global';
     renderAll();
+    scheduleSave();
   });
 
-  $('#btn-add-flow').addEventListener('click', addFlow);
+  $('#btn-add-flow').addEventListener('click', () => {
+    if (!ensureVisualMode()) return;
+    addFlow();
+  });
 
   $('#flow-list').addEventListener('click', (event) => {
     const button = event.target.closest('[data-flow]');
     if (!button) return;
+    if (!ensureVisualMode()) return;
     state.selected = button.dataset.flow;
     renderAll();
+    scheduleSave();
   });
 
   $('#form-panel').addEventListener('click', onAction);
@@ -1963,8 +2085,19 @@ function wire() {
 }
 
 function init() {
-  const restored = restoreDraft();
   wire();
+
+  const bootstrap = window.__CRF_BOOTSTRAP__;
+  if (bootstrap && typeof bootstrap.text === 'string') {
+    loadFileText(
+      bootstrap.text,
+      bootstrap.fileName,
+      `Opened ${bootstrap.fileName || 'routing file'}`,
+    );
+    return;
+  }
+
+  const restored = restoreDraft();
   renderAll();
   if (restored) toast('Local draft restored');
 }

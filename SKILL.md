@@ -32,6 +32,25 @@ context-preload editor --open
 
 Do not invent a routing file or silently fall back to reading the whole repo.
 
+### Free-text routing files
+
+A routing file does not have to use the structured flow syntax. If it is
+written as prose, read it whole and follow it as instructions. This is valid:
+
+```markdown
+When I am doing a review, read these files:
+- `docs/language.md`
+- `src/**/*.mjs`
+- `tests/**/*.test.mjs`
+
+Skip `tests/fixtures/**`. Report only concrete problems, with file and line.
+```
+
+Treat each "when I am doing X" clause as a flow. Use the same precedence
+(explicit, inferred, ask). If the file mixes prose and structured `## Flow:`
+sections, the structured entries are authoritative for paths and prose adds
+constraints. Never rewrite a free-text file to make it fit a schema.
+
 ## 2. Choose the flow
 
 Apply this precedence strictly:
@@ -91,7 +110,11 @@ which one you used.
 
 ## 3. Load the context
 
-Read the routing file once. Then follow this contract:
+Read the routing file once. If it is free text, follow the clause that matches
+the task and read the files it names, in order; the contract below applies to
+structured flows.
+
+For structured flows:
 
 1. Read the **Global** section: `ignore`, `read order`, `rules`, `budget`.
 2. Read the selected flow and its `includes`, recursively. Included flows come

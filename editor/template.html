@@ -240,6 +240,7 @@
     transition: border-color 0.15s, box-shadow 0.15s;
   }
   .field textarea { resize: vertical; min-height: 62px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; line-height: 1.5; }
+  #raw-text { min-height: 62vh; }
   .field input::placeholder, .field textarea::placeholder { color: color-mix(in srgb, var(--muted) 65%, transparent); }
   .field input:focus, .field textarea:focus {
     outline: none;
@@ -379,6 +380,7 @@
     <input id="filename" class="filename" value="routing-context-flow.md" aria-label="Name of the file to download" spellcheck="false">
     <div class="spacer"></div>
     <div class="actions">
+      <button class="btn ghost" id="btn-mode" type="button" title="Edit the file as free text">Raw</button>
       <button class="btn ghost" id="btn-import" type="button">Import</button>
       <button class="btn ghost" id="btn-new" type="button">New</button>
       <button class="btn ghost" id="btn-copy" type="button">Copy</button>

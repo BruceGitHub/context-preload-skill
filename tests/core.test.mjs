@@ -219,6 +219,20 @@ test('ranks flows from a natural language task', () => {
   assert.deepEqual(rankFlows(model, 'zzz qqq'), []);
 });
 
+test('treats a prose file as free-text routing', () => {
+  const { model, issues } = parseFlowFile(`
+# Context routing
+
+When I am doing a review, read these files:
+- docs/language.md
+- src/**/*.mjs
+
+Skip tests/fixtures. Report concrete problems.
+`);
+  assert.equal(model.flows.length, 0);
+  assert.ok(issues.some((issue) => issue.code === 'flows.empty' && issue.level === 'warning'));
+});
+
 test('unknown front matter keys are warnings, not errors', () => {
   const { issues } = parseFlowFile(`
 ---
