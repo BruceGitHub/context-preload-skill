@@ -620,7 +620,13 @@ export function serializeBuildFile(
     return `${out.join('\n').trimEnd()}\n`;
   }
 
+  const includedIds = new Set(model.flows.flatMap((flow) => flow.includes ?? []));
+
   for (const flow of model.flows) {
+    // `base` is the conventional include-only helper: its content is already
+    // merged into every flow that includes it, so it needs no own section.
+    if (flow.id === 'base' && includedIds.has('base')) continue;
+
     const merged = mergeBuildFlow(model, flow.id, []);
     const read = uniqueBuildReads(merged.read);
     const skip = uniqueBuildStrings([...(model.global?.ignore ?? []), ...merged.skip]);

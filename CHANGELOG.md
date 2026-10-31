@@ -18,8 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `context-preload editor` now serves the editor on a local HTTP URL and
   launches the browser from an interactive terminal; `--port` selects the port.
 - `context-preload build` writes `<name>.build.md`: includes merged, one linear
-  section per flow, globs preserved. The editor's **Build** button downloads the
-  same file, and the skill now reads only the build.
+  section per flow, globs preserved. The conventional `base` helper is not
+  emitted as its own section. The editor's **Build** button downloads the same
+  file, and the skill now reads only the build.
 
 ### Removed
 

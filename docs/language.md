@@ -300,7 +300,8 @@ Nothing is global or cached: each invocation reads the file you point at.
 
 `context-preload build` writes `<name>.build.md` next to the master:
 
-- one `## <id>` section per flow;
+- one `## <id>` section per flow; the conventional helper `base` is omitted
+  when other flows include it, because its content is already merged;
 - `includes` already merged;
 - `read` paths in order, globs preserved;
 - global `ignore` and flow `skip` collected under **Do not read**;

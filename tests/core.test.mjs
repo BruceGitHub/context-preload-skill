@@ -107,6 +107,7 @@ test('build expands includes and collects skip/ignore', () => {
 
   assert.match(text, /# Built routing — fixture/);
   assert.match(text, /## review/);
+  assert.doesNotMatch(text, /## base/);
   assert.match(text, /1\. `src\/core\/\*\*\/\*\.ts`/);
   assert.match(text, /`src\/api\/\*\*\/\*\.ts`/);
   assert.match(text, /Do not read:/);
