@@ -72,14 +72,14 @@
   <text x="738" y="105" class="mono accent">review · 4 files</text>
 
   <text x="738" y="139" class="mono">docs/language.md</text>
-  <text x="738" y="164" class="mono">src/**/*.mjs</text>
+  <text x="738" y="164" class="mono">src/**/*.ts</text>
   <text x="738" y="189" class="mono">tests/**/*.mjs</text>
   <text x="738" y="214" class="mono" opacity="0.45">tests/fixtures/**</text>
   <text x="876" y="214" class="small" opacity="0.55">skip</text>
 
   <line x1="738" y1="234" x2="902" y2="234" stroke="#223041"/>
   <text x="738" y="258" class="small">~12.4k tokens</text>
-  <text x="738" y="280" class="small">budget 50k</text>
+  <text x="738" y="280" class="small">read order</text>
 
   <text x="738" y="302" class="accent" style="fill:#3ddc97;font-family:ui-sans-serif,sans-serif;font-size:11.5px">everything else stays out</text>
 

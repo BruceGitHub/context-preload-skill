@@ -1,27 +1,66 @@
 /**
- * context-preload · resolver
- * Expands a flow into concrete files on disk: merges includes, applies
- * skip/ignore rules, expands globs, estimates tokens and reports gaps.
+ * CRC · resolve
+ *
+ * Scopo: espandere un flusso in file reali su disco: merge degli includes,
+ * skip/ignore, glob, stima token e segnalazione dei gap.
+ * Collaboratori: src/crf-core.ts (modello), src/glob.ts (matcher),
+ * src/types.ts (contratti), node:fs e node:path.
+ * Consumatori: src/cli.ts, tests/resolve.test.mjs.
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { parseFlowFile, parseBudget, getFlow } from './crf-core.mjs';
+import { parseFlowFile, getFlow } from './crf-core.ts';
 import {
   createMatcher,
   hasMagic,
   literalPrefix,
   normalizePath,
-} from './glob.mjs';
+} from './glob.ts';
+import type {
+  EntryStatus,
+  Issue,
+  LoadedRoutingFile,
+  Model,
+  ReadEntry,
+  ResolvedEntry,
+  ResolveResult,
+  ResolveTotals,
+} from './types.ts';
 
 const BUILTIN_IGNORE = ['.git/**'];
 
-export function estimateTokens(bytes) {
+interface FileInfo {
+  path: string;
+  size: number;
+}
+
+interface Merged {
+  read: ReadEntry[];
+  skip: string[];
+  description: string;
+  includes: string[];
+}
+
+interface MergeSource {
+  read?: ReadEntry[];
+  skip?: string[];
+  description?: string;
+  includes?: string[];
+}
+
+interface EvalContext {
+  root: string;
+  isSkipped: (value: string, isDirectory?: boolean) => boolean;
+  isPruned: (value: string, isDirectory?: boolean) => boolean;
+}
+
+export function estimateTokens(bytes: unknown): number {
   return Math.ceil((Number(bytes) || 0) / 4);
 }
 
 /** Read and parse a routing file, resolving its root directory. */
-export function loadRoutingFile(file) {
+export function loadRoutingFile(file: string): LoadedRoutingFile {
   const absolute = path.resolve(file);
   const text = fs.readFileSync(absolute, 'utf8');
   const { model, issues } = parseFlowFile(text);
@@ -31,15 +70,19 @@ export function loadRoutingFile(file) {
   return { file: absolute, baseDir, root, text, model, issues };
 }
 
-function isInside(root, target) {
+function isInside(root: string, target: string): boolean {
   const relative = path.relative(root, target);
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }
 
-function walkFiles(baseAbs, prefix, isPruned) {
-  const files = [];
+function walkFiles(
+  baseAbs: string,
+  prefix: string,
+  isPruned: (relative: string, isDirectory: boolean) => boolean,
+): FileInfo[] {
+  const files: FileInfo[] = [];
 
-  const visit = (abs, rel) => {
+  const visit = (abs: string, rel: string): void => {
     let entries;
     try {
       entries = fs.readdirSync(abs, { withFileTypes: true });
@@ -71,36 +114,23 @@ function walkFiles(baseAbs, prefix, isPruned) {
   return files.sort((a, b) => a.path.localeCompare(b.path));
 }
 
-function emptyMerged() {
+function emptyMerged(): Merged {
   return {
     read: [],
-    optional: [],
     skip: [],
-    rules: [],
-    steps: [],
-    doneWhen: [],
-    budget: null,
     description: '',
-    triggers: [],
     includes: [],
   };
 }
 
-function mergeInto(target, source) {
-  target.read.push(...source.read);
-  target.optional.push(...source.optional);
-  target.skip.push(...source.skip);
-  if (Array.isArray(source.rules)) target.rules.push(...source.rules);
-  else if (source.rules && String(source.rules).trim()) target.rules.push(String(source.rules).trim());
-  target.steps.push(...source.steps);
-  target.doneWhen.push(...source.doneWhen);
-  if (source.budget) target.budget = source.budget;
+function mergeInto(target: Merged, source: MergeSource): void {
+  target.read.push(...(source.read ?? []));
+  target.skip.push(...(source.skip ?? []));
   if (source.description) target.description = source.description;
-  if (source.triggers?.length) target.triggers = [...source.triggers];
   target.includes.push(...(source.includes ?? []));
 }
 
-function collectFlow(model, id, stack, issues) {
+function collectFlow(model: Model, id: string, stack: string[], issues: Issue[]): Merged {
   const flow = getFlow(model, id);
   if (!flow) {
     issues.push({
@@ -129,21 +159,15 @@ function collectFlow(model, id, stack, issues) {
 
   mergeInto(merged, {
     read: flow.read ?? [],
-    optional: flow.optional ?? [],
     skip: flow.skip ?? [],
-    rules: flow.rules,
-    steps: flow.steps ?? [],
-    doneWhen: flow.doneWhen ?? [],
-    budget: flow.budget,
     description: flow.description,
-    triggers: flow.triggers ?? [],
     includes: flow.includes ?? [],
   });
 
   return merged;
 }
 
-function dedupe(entries) {
+function dedupe(entries: ReadEntry[]): ReadEntry[] {
   const seen = new Set();
   const out = [];
   for (const entry of entries) {
@@ -155,12 +179,11 @@ function dedupe(entries) {
   return out;
 }
 
-function evaluateEntry(entry, context, optional) {
+function evaluateEntry(entry: ReadEntry, context: EvalContext): ResolvedEntry {
   const pattern = normalizePath(entry.path);
-  const base = {
+  const base: ResolvedEntry = {
     pattern,
     note: entry.note ?? '',
-    optional: Boolean(optional),
     matches: [],
     tokens: 0,
     status: 'empty',
@@ -237,7 +260,7 @@ function evaluateEntry(entry, context, optional) {
   };
 }
 
-function dedupeReadFiles(entries, root) {
+function dedupeReadFiles(entries: ResolvedEntry[], root: string): ResolvedEntry[] {
   const seen = new Set();
 
   for (const entry of entries) {
@@ -272,10 +295,14 @@ function dedupeReadFiles(entries, root) {
  * @param {string} flowId
  * @param {{root?: string, check?: boolean}} options
  */
-export function resolveFlow(model, flowId, options = {}) {
+export function resolveFlow(
+  model: Model,
+  flowId: string,
+  options: { root?: string; check?: boolean } = {},
+): ResolveResult {
   const root = path.resolve(options.root ?? process.cwd());
   const check = options.check !== false;
-  const issues = [];
+  const issues: Issue[] = [];
 
   const flow = getFlow(model, flowId);
   if (!flow) {
@@ -304,37 +331,29 @@ export function resolveFlow(model, flowId, options = {}) {
   const isPruned = createMatcher([...(model.global?.ignore ?? []), ...BUILTIN_IGNORE]);
   const context = { root, isSkipped, isPruned };
 
-  const evaluate = (entries, optional) =>
+  const evaluate = (entries: ReadEntry[]): ResolvedEntry[] =>
     entries.map((entry) => {
       if (!check) {
         return {
           pattern: normalizePath(entry.path),
           note: entry.note ?? '',
-          optional: Boolean(optional),
           matches: [],
           tokens: 0,
-          status: 'unchecked',
+          status: 'unchecked' as EntryStatus,
           isDirectory: false,
         };
       }
-      return evaluateEntry(entry, context, optional);
+      return evaluateEntry(entry, context);
     });
 
-  const readEntries = evaluate(dedupe(merged.read), false);
-  const optionalEntries = evaluate(
-    dedupe(merged.optional).filter(
-      (entry) => !merged.read.some((read) => normalizePath(read.path) === normalizePath(entry.path)),
-    ),
-    true,
-  );
+  const readEntries = evaluate(dedupe(merged.read));
 
   if (check) {
     dedupeReadFiles(readEntries, root);
-    dedupeReadFiles(optionalEntries, root);
   }
 
   if (check) {
-    for (const entry of [...readEntries, ...optionalEntries]) {
+    for (const entry of readEntries) {
       if (entry.status === 'missing') {
         issues.push({
           level: 'warning',
@@ -360,37 +379,24 @@ export function resolveFlow(model, flowId, options = {}) {
     }
   }
 
-  const allMatches = [...readEntries, ...optionalEntries].flatMap((entry) => entry.matches);
-  const totals = {
+  const allMatches = readEntries.flatMap((entry) => entry.matches);
+  const totals: ResolveTotals = {
     files: allMatches.length,
-    tokens: [...readEntries, ...optionalEntries].reduce((sum, entry) => sum + entry.tokens, 0),
+    tokens: readEntries.reduce((sum, entry) => sum + entry.tokens, 0),
     required: readEntries.reduce((sum, entry) => sum + entry.matches.length, 0),
-    optional: optionalEntries.reduce((sum, entry) => sum + entry.matches.length, 0),
-    missing: [...readEntries, ...optionalEntries].filter((entry) => entry.status === 'missing').length,
-    empty: [...readEntries, ...optionalEntries].filter((entry) => entry.status === 'empty').length,
-    skipped: [...readEntries, ...optionalEntries].filter((entry) => entry.status === 'skipped').length,
+    missing: readEntries.filter((entry) => entry.status === 'missing').length,
+    empty: readEntries.filter((entry) => entry.status === 'empty').length,
+    skipped: readEntries.filter((entry) => entry.status === 'skipped').length,
   };
-
-  const budgetRaw = merged.budget || model.global?.budget || model.meta?.defaultBudget || '';
-  const budget = parseBudget(budgetRaw);
 
   return {
     flow: flowId,
     found: true,
     description: merged.description || flow.description || '',
-    triggers: merged.triggers,
     includes: merged.includes,
-    rules: merged.rules.join('\n\n'),
-    globalRules: model.global?.rules ?? '',
     readOrder: model.global?.readOrder ?? '',
-    steps: merged.steps,
-    doneWhen: merged.doneWhen,
     skip: merged.skip,
-    budgetRaw,
-    budget,
-    overBudget: budget !== null && totals.tokens > budget,
     entries: readEntries,
-    optionalEntries,
     totals,
     root,
     issues,

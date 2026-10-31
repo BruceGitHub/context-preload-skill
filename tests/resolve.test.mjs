@@ -1,11 +1,18 @@
+/**
+ * CRC · tests/resolve
+ *
+ * Scopo: test del resolver (include, skip/ignore, glob, token, root).
+ * Collaboratori: src/resolve.ts, src/crf-core.ts, tests/fixtures/repo.
+ * Consumatori: node --test, CI.
+ */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { createEmptyModel, createFlow, parseFlowFile } from '../src/crf-core.mjs';
-import { loadRoutingFile, resolveFlow } from '../src/resolve.mjs';
+import { createEmptyModel, createFlow, parseFlowFile } from '../src/crf-core.ts';
+import { loadRoutingFile, resolveFlow } from '../src/resolve.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE_DIR = path.join(HERE, 'fixtures', 'repo');
@@ -19,22 +26,18 @@ test('merges includes before the flow itself', () => {
   assert.equal(result.entries[0].pattern, 'src/core/**/*.ts');
   assert.deepEqual(result.entries[0].matches, ['src/core/db.ts']);
   assert.deepEqual(result.entries[1].matches, ['src/api/orders.ts', 'src/api/users.ts']);
-  assert.equal(result.budget, 60_000);
   assert.ok(result.totals.tokens > 0);
-  assert.equal(result.overBudget, false);
 });
 
 test('applies skip rules and global ignores', () => {
   const loaded = loadRoutingFile(FIXTURE);
   const result = resolveFlow(loaded.model, 'review', { root: loaded.root });
-  const all = [...result.entries, ...result.optionalEntries].flatMap((entry) => entry.matches);
+  const all = result.entries.flatMap((entry) => entry.matches);
 
   assert.ok(all.includes('docs/guide.md'));
   assert.ok(!all.includes('docs/legacy/old.md'));
   assert.ok(!all.some((file) => file.startsWith('node_modules/')));
-  assert.equal(result.totals.files, 6);
-  assert.equal(result.optionalEntries[0].pattern, 'CHANGELOG.md');
-  assert.equal(result.optionalEntries[0].status, 'ok');
+  assert.equal(result.totals.files, 5);
 });
 
 test('reports missing paths as warnings', () => {

@@ -14,13 +14,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: [20, 22]
+        node: [22, 24]
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
+
+      - name: Type check
+        run: npm run typecheck
 
       - name: Unit, resolver and CLI tests
         run: npm test
@@ -33,3 +36,9 @@ jobs:
         run: |
           npm run build:editor
           git diff --exit-code -- editor/index.html
+
+      - name: Routing build is up to date
+        if: matrix.node == 22
+        run: |
+          npm run build:routing
+          git diff --exit-code -- routing-context-flow.build.md

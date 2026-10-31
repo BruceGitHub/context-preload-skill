@@ -1,25 +1,28 @@
 /**
- * context-preload · glob
- * A tiny, dependency-free glob matcher used to expand read/skip/ignore entries.
- * Supports `*`, `**`, `?` and `{a,b}` alternatives.
+ * CRC · glob
+ *
+ * Scopo: matcher glob senza dipendenze per espandere read/skip/ignore;
+ * supporta `*`, `**`, `?`, `{a,b}` e `[abc]`.
+ * Collaboratori: nessuno.
+ * Consumatori: src/resolve.ts, tests/glob.test.mjs.
  */
 
 const MAGIC = /[*?[{]/;
 const REGEX_SPECIAL = /[.+^$()|[\]\\]/;
 
-export function normalizePath(value) {
+export function normalizePath(value: unknown): string {
   return String(value ?? '')
     .replace(/\\/g, '/')
     .replace(/^\.\//, '')
     .replace(/\/{2,}/g, '/');
 }
 
-export function hasMagic(pattern) {
+export function hasMagic(pattern: unknown): boolean {
   return MAGIC.test(String(pattern));
 }
 
 /** Expand `{a,b}` groups (including nested ones) into plain patterns. */
-export function expandBraces(pattern) {
+export function expandBraces(pattern: unknown): string[] {
   const text = normalizePath(pattern);
   const open = text.indexOf('{');
   if (open === -1) return [text];
@@ -45,7 +48,7 @@ export function expandBraces(pattern) {
   return splitTopLevel(body).flatMap((alternative) => expandBraces(`${before}${alternative}${after}`));
 }
 
-function splitTopLevel(body) {
+function splitTopLevel(body: string): string[] {
   const parts = [];
   let depth = 0;
   let current = '';
@@ -64,7 +67,7 @@ function splitTopLevel(body) {
 }
 
 /** Compile a single brace-free glob into a RegExp anchored at both ends. */
-export function compileGlob(pattern) {
+export function compileGlob(pattern: unknown): RegExp {
   const text = normalizePath(pattern);
   let source = '';
 
@@ -106,10 +109,10 @@ export function compileGlob(pattern) {
   return new RegExp(`^${source}$`);
 }
 
-const cache = new Map();
+const cache = new Map<string, RegExp>();
 
 /** Test whether `value` matches a glob pattern (with brace support). */
-export function matchGlob(pattern, value) {
+export function matchGlob(pattern: unknown, value: unknown): boolean {
   const target = normalizePath(value);
   return expandBraces(pattern).some((expanded) => {
     let regex = cache.get(expanded);
@@ -122,7 +125,9 @@ export function matchGlob(pattern, value) {
 }
 
 /** Build a matcher from a list of patterns. */
-export function createMatcher(patterns = []) {
+export function createMatcher(
+  patterns: string[] = [],
+): (value: string, isDirectory?: boolean) => boolean {
   const regexes = patterns.flatMap((pattern) =>
     expandBraces(pattern).map((expanded) => {
       let regex = cache.get(expanded);
@@ -141,7 +146,7 @@ export function createMatcher(patterns = []) {
 }
 
 /** Longest literal prefix of a pattern (used as walk root). */
-export function literalPrefix(pattern) {
+export function literalPrefix(pattern: unknown): string {
   const segments = normalizePath(pattern).split('/');
   const literal = [];
   for (const segment of segments) {

@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/BruceGitHub/context-preload-skill/actions/workflows/ci.yml/badge.svg)](https://github.com/BruceGitHub/context-preload-skill/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-3ddc97.svg)](LICENSE)
-[![Node](https://img.shields.io/badge/node-%3E%3D18.18-66b3ff.svg)](package.json)
+[![Node](https://img.shields.io/badge/node-%3E%3D22.18-66b3ff.svg)](package.json)
 [![Dependencies](https://img.shields.io/badge/runtime%20deps-0-3ddc97.svg)](package.json)
 
 A skill + a tiny CLI + a visual editor for **routing the context** of an AI agent.
@@ -24,24 +24,18 @@ for the job at hand.
 
 `context-preload` adds one file to the repo: [`routing-context-flow.md`](routing-context-flow.md).
 It declares **flows**. Each flow says which files to read for a kind of task,
-what to skip, in which order, and under which rules.
+what to skip and in which order.
 
 ```markdown
 ## Flow: review
 
 - description: Review a change without rewriting it.
-- triggers: review, pr, diff, check
 - read:
   - `docs/language.md`        | the contract to check against
-  - `src/**/*.mjs`            | the implementation
+  - `src/**/*.ts`             | the implementation
   - `tests/**/*.test.mjs`     | existing expectations
 - skip:
   - `tests/fixtures/**`
-- steps:
-  1. Read the diff.
-  2. Report findings with file:line.
-- done when:
-  - Every finding has a severity and a proposed fix.
 ```
 
 Then the prompt stays natural:
@@ -68,66 +62,70 @@ In the repository you want to route:
 ```bash
 context-preload init              # creates a starter routing-context-flow.md
 context-preload list              # shows the flows
-context-preload show review       # expands globs and prints the reading plan
 context-preload validate          # checks structure and paths
+context-preload build             # writes routing-context-flow.build.md
 ```
 
-No dependencies, no build step for the CLI. Node.js >= 18.18.
+No runtime dependencies, no build step for the CLI. Node.js >= 22.18 (native
+TypeScript type stripping).
 
-This repository ships its own [`routing-context-flow.md`](routing-context-flow.md),
-so right after cloning you can run `context-preload show review` and see the
-router applied to itself.
+This repository ships its own [`routing-context-flow.md`](routing-context-flow.md)
+and the generated [`routing-context-flow.build.md`](routing-context-flow.build.md),
+so right after cloning you can run `context-preload list` and see the router
+applied to itself.
 
-## What a resolved flow looks like
+## What the build file looks like
 
-```text
-$ context-preload show review
+`context-preload build` merges the includes and writes one linear block per
+flow:
 
-context-preload · routing-context-flow.md
-crf v1 · 6 flows · root /home/me/project
+```markdown
+# Built routing — my-project
+# Generated from routing-context-flow.md. Do not edit.
 
-▸ review — Review a change without rewriting it.
-  triggers  review, pr, diff, check
-  includes  base
-  budget    50k · ~12.4k estimated tokens
-  order     first the contract, then the implementation, then the tests.
+## review
+Review a change without rewriting it.
 
-Read (4)
-   1. docs/language.md              ✓ 1 file · the contract
-   2. src/**/*.mjs                  ✓ 5 files · implementation
-   3. tests/**/*.test.mjs           ✓ 4 files · expectations
-   4. docs/legacy/**                · skipped by rule
+Read these paths, in order:
 
-Total: 10 files · ~12.4k tokens
+1. `docs/language.md`
+2. `src/core/**/*.ts`
+3. `src/api/**/*.ts`
+4. `tests/**/*.test.mjs`
+
+Do not read:
+
+- `tests/fixtures/**`
+- `node_modules/**`
+
+## coding
+Implement a feature or a fix.
+
+Read these paths, in order:
+
+1. `docs/language.md`
+2. `src/core/**/*.ts`
+3. `src/**/*.ts`
 ```
 
-The agent gets a deterministic reading plan instead of guessing.
+The skill reads this file, picks the flow and follows the order. It never reads
+the master. If the build is missing, the skill stops and asks you to run
+`context-preload build`.
 
 ## Choosing a flow
 
 | Situation | Behaviour |
 | --- | --- |
 | `use context-preload, flow review` | The named flow is used. |
-| `review the feature/dd-100 branch using context-preload` | The flow is inferred from triggers (`review`, `diff`, `pr`). |
+| `review the feature/dd-100 branch using context-preload` | The flow is inferred from description keywords and id. |
 | Ambiguous or no match | The agent asks, with a numbered list. Never a silent guess. |
 
-The CLI exposes the same inference:
 
-```bash
-$ context-preload pick "review the feature/dd-100 branch"
-→ review (8.7 · trigger "review")
-
-$ context-preload interactive
-  1. review    Review a change without rewriting it.
-  2. coding    Implement a feature or a fix.
-  3. debug     Find the cause of a bug.
-Which flow? [enter = review]
-```
 
 ## Multiple routing files
 
-The skill takes the file as input, so you can keep one per team, service or
-context:
+The build takes the file as input, so you can keep one master per team, service
+or context:
 
 ```
 routing-context-flow.md
@@ -136,7 +134,9 @@ docs/routing-context-flow.backend.md
 ```
 
 ```bash
-context-preload show review --file docs/routing-context-flow.backend.md
+context-preload validate --file docs/routing-context-flow.backend.md
+context-preload build --file docs/routing-context-flow.backend.md
+# → docs/routing-context-flow.backend.build.md
 ```
 
 Boring on purpose: no global state, no cache, no daemon. One file, read every
@@ -144,20 +144,26 @@ time.
 
 ## Visual editor
 
-`editor/index.html` is a single, offline page: forms for global rules and
+`editor/index.html` is a single, offline page: forms for global paths and
 flows, a free-text mode for prose routing files, live canonical Markdown
 preview, structural validation, import by file or drag & drop, download, copy,
-and a local autosave draft.
+a **Build** button that downloads `<name>.build.md`, and a local autosave draft.
 
 ```bash
-context-preload editor --open                 # blank editor
-context-preload editor path/to/routing.md     # opens a copy with the file loaded
+context-preload editor                               # serves the blank editor
+context-preload editor path/to/routing.md            # serves it with the file loaded
+context-preload editor --port 8765                   # fixed port
 ```
 
 Opening a file creates a temporary HTML copy with the content embedded, because
-a browser cannot read local paths directly. No CDN, no server, no dependencies.
-It shares the parser with the CLI, so what you see is what `validate` sees. See
-[docs/editor.md](docs/editor.md).
+a browser cannot read local paths directly. `editor` starts a tiny local HTTP
+server, prints an address such as `http://127.0.0.1:8765/` and keeps running
+until Ctrl+C; it also launches the browser when stdout is an interactive
+terminal. This is the reliable way to open the editor on
+WSL, where `xdg-open` may not find a browser: when Chrome, Edge or Firefox is
+installed on Windows, the CLI launches it directly with the URL. No CDN, no runtime dependencies: the server uses only
+Node's built-in `http` module. It shares the parser with the CLI, so what you
+see is what `validate` sees. See [docs/editor.md](docs/editor.md).
 
 ## Install as a skill
 
@@ -182,24 +188,21 @@ ln -s "$PWD" ~/.claude/skills/context-preload
 Project-level: `.claude/skills/context-preload`.
 
 The skill uses the CLI when it is on `PATH`, otherwise
-`node <skill-dir>/bin/context-preload.mjs`.
+`node <skill-dir>/bin/context-preload.ts`. It reads
+`routing-context-flow.build.md`; run `context-preload build` after editing the
+master.
 
 ## CLI
 
 | Command | What it does |
 | --- | --- |
-| `context-preload list [file]` | List flows, triggers, includes and budgets. |
-| `context-preload show <flow> [file]` | Resolve a flow and print the reading plan. |
-| `context-preload show <flow> --paths` | Print only the required paths. |
-| `context-preload resolve <flow>` | Same as `show`, as JSON. |
+| `context-preload list [file]` | List flows and includes. |
 | `context-preload validate [file]` | Check syntax, ids, includes, cycles and paths. |
-| `context-preload pick "<task>"` | Infer the best flow from a task description. |
-| `context-preload interactive` | Numbered menu to choose a flow. |
+| `context-preload build [file]` | Write `<name>.build.md` with includes merged. |
 | `context-preload init [file]` | Write a starter routing file. |
-| `context-preload editor [file] [--open]` | Open the visual editor, optionally with a routing file. |
+| `context-preload editor [file]` | Serve the visual editor, optionally with a routing file. |
 
-Useful flags: `--file`, `--root`, `--json`, `--pretty`, `--all`,
-`--no-check`, `--no-paths`, `--strict`, `--no-color`, `--no-open`.
+Useful flags: `--file`, `--root`, `--strict`.
 
 ## The routing language
 
@@ -208,52 +211,46 @@ In the structured mode, a flow is a Markdown section with list keys:
 | Key | Purpose |
 | --- | --- |
 | `description` | What the flow is for. |
-| `triggers` | Phrases used to infer the flow. |
-| `priority` | Tie-breaker among inferred flows. |
 | `includes` | Merge another flow's context first. |
 | `read` | Files to read, in order (`path | note`). |
-| `optional` | Files only if needed. |
 | `skip` | Globs removed from this flow. |
-| `budget` | Soft token budget (`60k`). |
-| `steps` | How to perform the task. |
-| `rules` | Constraints on how to work. |
-| `done when` | Completion criteria. |
 
-`## Global` adds `ignore`, `read order`, `budget`, `root` and global `rules`.
+`## Global` adds `ignore`, `read order` and `root`.
 Globs support `*`, `**`, `?`, `{a,b}` and `[abc]`. English key synonyms are
-accepted (`use when`, `files`, `exclude`, `rule`, `step`…).
+accepted (`use when`, `files`, `exclude`).
 
 Full specification: [docs/language.md](docs/language.md).
 
-### Free-text routing
+### Free-text drafts
 
-For a quick start, the file can be plain prose. This is a valid routing file:
+The editor's **Raw** mode can hold plain prose:
 
 ```markdown
 When I am doing a review, read these files:
 - `docs/language.md`
-- `src/**/*.mjs`
+- `src/**/*.ts`
 - `tests/**/*.test.mjs`
 
-Skip `tests/fixtures/**`. Report only concrete problems, with file and line.
+Skip `tests/fixtures/**`.
 ```
 
-The skill reads it directly. Structured flows add deterministic glob
-expansion, includes, budgets and validation; the CLI only expands structured
-flows. See [examples/free-text-routing-context-flow.md](examples/free-text-routing-context-flow.md).
+Free text is a scratch draft. `context-preload build` and the skill require
+structured `## Flow:` sections; without them the build contains `_No flows._`.
+See [examples/free-text-routing-context-flow.md](examples/free-text-routing-context-flow.md).
 
 ## Repository layout
 
 ```
 .
 ├── SKILL.md                      # the agent-facing skill
-├── bin/context-preload.mjs       # CLI entry point
+├── bin/context-preload.ts        # CLI entry point
 ├── src/
-│   ├── crf-core.mjs              # parser, serializer, validator, ranking
-│   ├── glob.mjs                  # dependency-free glob matcher
-│   ├── resolve.mjs               # includes, skip/ignore, token estimates
-│   ├── cli.mjs                   # commands and output
-│   └── template.mjs              # starter file written by `init`
+│   ├── crf-core.ts               # parser, serializer, validator, ranking
+│   ├── glob.ts                   # dependency-free glob matcher
+│   ├── resolve.ts                # includes, skip/ignore, token estimates
+│   ├── cli.ts                    # commands and output
+│   ├── template.ts               # starter file written by `init`
+│   └── types.ts                  # shared model types
 ├── editor/
 │   ├── template.html             # layout + styles (source)
 │   ├── editor.js                 # UI logic (source)
@@ -261,7 +258,6 @@ flows. See [examples/free-text-routing-context-flow.md](examples/free-text-routi
 ├── scripts/build-editor.mjs      # inlines the core into the editor
 ├── routing-context-flow.md       # this repository routes itself
 ├── examples/                     # structured and free-text routing examples
-├── schema/                       # JSON Schema of the parsed model
 ├── docs/                         # language, editor, diagram
 └── tests/                        # node:test, fixtures, CLI smoke tests
 ```
@@ -269,15 +265,20 @@ flows. See [examples/free-text-routing-context-flow.md](examples/free-text-routi
 ## Development
 
 ```bash
+npm install              # dev dependencies: TypeScript and @types/node
+npm run typecheck        # tsc --noEmit
 npm test                 # unit + resolver + CLI tests
+npm run build:routing    # regenerate routing-context-flow.build.md
 npm run build:editor     # regenerate editor/index.html
 npm run validate:examples
 npm run check            # all of the above
 ```
 
-Zero runtime dependencies. The core is pure ESM with no Node APIs, which is why
-the same code runs in the CLI and in the browser. CI runs the tests on Node 20
-and 22 and fails if `editor/index.html` is stale.
+The CLI and the core are TypeScript, executed directly by Node's type stripping
+(no emit step). `tsc` is only used for type checking. Zero runtime dependencies:
+the core has no Node APIs, which is why the same code runs in the CLI and in
+the browser. CI runs the tests on Node 22 and 24 and fails if
+`editor/index.html` is stale.
 
 ## License
 

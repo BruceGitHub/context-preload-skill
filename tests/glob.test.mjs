@@ -1,3 +1,10 @@
+/**
+ * CRC · tests/glob
+ *
+ * Scopo: test del matcher glob e dell'espansione delle graffe.
+ * Collaboratori: src/glob.ts.
+ * Consumatori: node --test, CI.
+ */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -7,7 +14,7 @@ import {
   hasMagic,
   literalPrefix,
   matchGlob,
-} from '../src/glob.mjs';
+} from '../src/glob.ts';
 
 test('detects magic', () => {
   assert.equal(hasMagic('src/a.ts'), false);

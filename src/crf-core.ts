@@ -1,12 +1,26 @@
 /**
- * context-preload · core
+ * CRC · crf-core
  *
- * Parser, serializer, validator and flow ranking for the
- * routing-context-flow language (CRL).
- *
- * This module is intentionally free of Node.js APIs: the same code powers
- * the CLI and the offline browser editor.
+ * Scopo: parser, serializer, validatore e ranking dei flussi per il linguaggio
+ * routing-context-flow (CRL).
+ * Collaboratori: src/types.ts (contratti); nessuna API Node, così lo stesso
+ * codice gira nella CLI e nell'editor browser.
+ * Consumatori: src/cli.ts, src/resolve.ts, scripts/build-editor.mjs,
+ * tests/core.test.mjs, tests/resolve.test.mjs.
  */
+
+import type {
+  Block,
+  Flow,
+  GlobalConfig,
+  Issue,
+  Model,
+  ModelMeta,
+  ParsedFile,
+  RankedFlow,
+  ReadEntry,
+  Section,
+} from './types.ts';
 
 export const CRF_VERSION = 1;
 
@@ -15,12 +29,6 @@ const FLOW_KEYS = new Map([
   ['description', 'description'],
   ['use when', 'description'],
   ['when to use', 'description'],
-  // triggers
-  ['triggers', 'triggers'],
-  ['trigger', 'triggers'],
-  ['trigger words', 'triggers'],
-  // priority
-  ['priority', 'priority'],
   // includes
   ['includes', 'includes'],
   ['include', 'includes'],
@@ -28,48 +36,24 @@ const FLOW_KEYS = new Map([
   // read
   ['read', 'read'],
   ['files', 'read'],
-  // optional
-  ['optional', 'optional'],
-  ['read if needed', 'optional'],
   // skip
   ['skip', 'skip'],
   ['exclude', 'skip'],
-  // budget
-  ['budget', 'budget'],
-  ['token budget', 'budget'],
-  // rules
-  ['rules', 'rules'],
-  ['rule', 'rules'],
-  // steps
-  ['steps', 'steps'],
-  ['step', 'steps'],
-  // done when
-  ['done when', 'doneWhen'],
-  ['done', 'doneWhen'],
-  ['definition of done', 'doneWhen'],
 ]);
 
-const GLOBAL_KEYS = new Map([
+const GLOBAL_KEYS: Map<string, keyof GlobalConfig> = new Map([
   ['ignore', 'ignore'],
   ['exclude', 'ignore'],
   ['read order', 'readOrder'],
   ['order', 'readOrder'],
-  ['budget', 'budget'],
-  ['default budget', 'budget'],
-  ['rules', 'rules'],
-  ['rule', 'rules'],
   ['root', 'root'],
 ]);
 
-const META_ALIASES = new Map([
+const META_ALIASES: Map<string, keyof ModelMeta> = new Map([
   ['crf', 'crf'],
   ['version', 'crf'],
   ['name', 'name'],
   ['description', 'description'],
-  ['default_budget', 'defaultBudget'],
-  ['default-budget', 'defaultBudget'],
-  ['defaultbudget', 'defaultBudget'],
-  ['budget', 'defaultBudget'],
   ['root', 'root'],
 ]);
 
@@ -79,23 +63,26 @@ const FLOW_ID_RE = /^[a-z0-9][a-z0-9_-]*$/;
 /* Small helpers                                                       */
 /* ------------------------------------------------------------------ */
 
-const oneLine = (value) => String(value ?? '').replace(/\s*\n\s*/g, ' ').trim();
+const oneLine = (value: unknown): string =>
+  String(value ?? '')
+    .replace(/\s*\n\s*/g, ' ')
+    .trim();
 
-function normalizeKey(raw) {
+function normalizeKey(raw: unknown): string {
   return String(raw).toLowerCase().replace(/[_\s]+/g, ' ').trim();
 }
 
-function dedent(lines) {
+function dedent(lines: string[]): string[] {
   const nonBlank = lines.filter((line) => line.trim());
   const indent = nonBlank.reduce(
-    (min, line) => Math.min(min, line.match(/^[ \t]*/)[0].length),
+    (min, line) => Math.min(min, line.match(/^[ \t]*/)?.[0].length ?? 0),
     Infinity,
   );
   const cut = Number.isFinite(indent) ? indent : 0;
   return lines.map((line) => (line.trim() ? line.slice(cut) : ''));
 }
 
-function trimBlankEdges(lines) {
+function trimBlankEdges(lines: string[]): string[] {
   let start = 0;
   let end = lines.length;
   while (start < end && !lines[start].trim()) start += 1;
@@ -103,19 +90,19 @@ function trimBlankEdges(lines) {
   return lines.slice(start, end);
 }
 
-function splitInlineList(value) {
+function splitInlineList(value: unknown): string[] {
   return String(value)
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
 }
 
-function stripListMarker(line) {
+function stripListMarker(line: string): string | null {
   const match = line.match(/^\s*(?:[-*+]|\d+[.)])\s+(.*)$/);
   return match ? match[1] : null;
 }
 
-function unquote(value) {
+function unquote(value: unknown): string {
   const text = String(value).trim();
   if (text.length >= 2 && text.startsWith('"') && text.endsWith('"')) {
     return text.slice(1, -1).replace(/\\"/g, '"');
@@ -127,23 +114,6 @@ function unquote(value) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Budgets                                                             */
-/* ------------------------------------------------------------------ */
-
-/** Parse a human budget ("80k", "2M", "80000 tokens") into a number. */
-export function parseBudget(value) {
-  if (value === null || value === undefined) return null;
-  const text = String(value).toLowerCase();
-  const match = text.match(/(\d+(?:\.\d+)?)\s*(k|m)?/);
-  if (!match) return null;
-  const amount = Number(match[1]);
-  if (!Number.isFinite(amount)) return null;
-  const unit = match[2];
-  const multiplier = unit === 'k' ? 1000 : unit === 'm' ? 1_000_000 : 1;
-  return Math.round(amount * multiplier);
-}
-
-/* ------------------------------------------------------------------ */
 /* Read entries                                                        */
 /* ------------------------------------------------------------------ */
 
@@ -151,7 +121,7 @@ export function parseBudget(value) {
  * Parse a single read entry line into `{ path, note }`.
  * Accepted forms: `src/**` · `src/** | why` · `src/** — why`
  */
-export function parseReadEntry(raw) {
+export function parseReadEntry(raw: unknown): ReadEntry {
   let text = String(raw ?? '').trim();
   let path = '';
   let note = '';
@@ -177,9 +147,10 @@ export function parseReadEntry(raw) {
 }
 
 /** Format a read entry the way the canonical file expects it. */
-export function formatReadEntry(entry) {
-  const path = String(entry?.path ?? entry ?? '').trim();
-  const note = String(entry?.note ?? '').trim();
+export function formatReadEntry(entry: ReadEntry | string): string {
+  const record = typeof entry === 'object' && entry !== null ? entry : null;
+  const path = String(record?.path ?? entry ?? '').trim();
+  const note = String(record?.note ?? '').trim();
   return note ? `\`${path}\` | ${note}` : `\`${path}\``;
 }
 
@@ -191,16 +162,19 @@ export function formatReadEntry(entry) {
  * Split the document body into sections on level-2 headings, ignoring
  * headings that live inside fenced code blocks.
  */
-function splitSections(lines, issues) {
-  const sections = [];
-  let preamble = [];
-  let current = null;
-  let fence = null;
+function splitSections(
+  lines: string[],
+  issues: Issue[],
+): { sections: Section[]; preamble: string[] } {
+  const sections: Section[] = [];
+  const preamble: string[] = [];
+  let current: Section | null = null;
+  let fence: string | null = null;
 
   for (const line of lines) {
     const fenceMatch = line.trimStart().match(/^(```+|~~~+)/);
     if (fenceMatch) {
-      fence = fence ? null : fenceMatch[1][0];
+      fence = fence ? null : (fenceMatch[1]?.[0] ?? null);
     }
 
     if (!fence) {
@@ -238,15 +212,15 @@ function splitSections(lines, issues) {
  * Turn a section body into raw blocks: `{ key, inline, lines }`.
  * Key lines must start at column 0 with "- key:" and are not inside fences.
  */
-function scanBlocks(lines, issues, sectionLabel) {
-  const blocks = [];
-  let current = null;
-  let fence = null;
+function scanBlocks(lines: string[], issues: Issue[], sectionLabel: string): Block[] {
+  const blocks: Block[] = [];
+  let current: Block | null = null;
+  let fence: string | null = null;
 
   for (const line of lines) {
     const fenceMatch = line.trimStart().match(/^(```+|~~~+)/);
     if (fenceMatch) {
-      fence = fence ? null : fenceMatch[1][0];
+      fence = fence ? null : (fenceMatch[1]?.[0] ?? null);
     }
 
     if (!fence && !/^\s/.test(line)) {
@@ -272,13 +246,13 @@ function scanBlocks(lines, issues, sectionLabel) {
   return blocks;
 }
 
-function blockText(block) {
+function blockText(block: Block): string {
   const lines = dedent(trimBlankEdges(block.lines));
   const parts = block.inline ? [block.inline, ...lines] : lines;
   return trimBlankEdges(parts).join('\n').trim();
 }
 
-function blockList(block, issues, label) {
+function blockList(block: Block, issues: Issue[], label: string): string[] {
   const items = [];
   if (block.inline) items.push(block.inline);
 
@@ -299,7 +273,7 @@ function blockList(block, issues, label) {
   return items;
 }
 
-function blockPathList(block, issues, label) {
+function blockPathList(block: Block, issues: Issue[], label: string): ReadEntry[] {
   return blockList(block, issues, label).map(parseReadEntry).filter((entry) => entry.path);
 }
 
@@ -307,46 +281,43 @@ function blockPathList(block, issues, label) {
 /* Model factories                                                     */
 /* ------------------------------------------------------------------ */
 
-export function createFlow(id = '', patch = {}) {
+export function createFlow(id = '', patch: Partial<Flow> = {}): Flow {
   return {
     id,
     description: '',
-    triggers: [],
-    priority: 0,
     includes: [],
     read: [],
-    optional: [],
     skip: [],
-    budget: '',
-    rules: '',
-    steps: [],
-    doneWhen: [],
     ...patch,
   };
 }
 
-export function createEmptyModel(patch = {}) {
+export function createEmptyModel(
+  patch: {
+    meta?: Partial<ModelMeta>;
+    global?: Partial<GlobalConfig>;
+    flows?: Flow[];
+  } = {},
+): Model {
   return {
     meta: {
       crf: CRF_VERSION,
       name: '',
       description: '',
-      defaultBudget: '',
       root: '',
       ...(patch.meta ?? {}),
     },
     global: {
       ignore: [],
-      rules: '',
       readOrder: '',
-      budget: '',
+      root: '',
       ...(patch.global ?? {}),
     },
     flows: patch.flows ?? [],
   };
 }
 
-export function slugifyFlowId(value) {
+export function slugifyFlowId(value: unknown): string {
   return String(value)
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -360,17 +331,19 @@ export function slugifyFlowId(value) {
 /* Parser                                                              */
 /* ------------------------------------------------------------------ */
 
-/**
- * Parse a routing-context-flow markdown file.
- * @returns {{ model: object, issues: Array<object> }}
- */
-export function parseFlowFile(source) {
-  const issues = [];
+/** Parse a routing-context-flow markdown file. */
+export function parseFlowFile(source: unknown): ParsedFile {
+  const issues: Issue[] = [];
   const text = String(source ?? '')
     .replace(/^\uFEFF/, '')
     .replace(/\r\n?/g, '\n');
   const lines = text.split('\n');
-  const meta = { crf: CRF_VERSION, name: '', description: '', defaultBudget: '', root: '' };
+  const meta: ModelMeta = {
+    crf: CRF_VERSION,
+    name: '',
+    description: '',
+    root: '',
+  };
   let cursor = 0;
   while (cursor < lines.length && !lines[cursor].trim()) cursor += 1;
 
@@ -404,18 +377,20 @@ export function parseFlowFile(source) {
           });
           continue;
         }
-        meta[key] = unquote(match[2]);
+        if (key === 'crf') {
+          meta.crf = Number(unquote(match[2])) || CRF_VERSION;
+        } else {
+          meta[key] = unquote(match[2]);
+        }
       }
       cursor = end + 1;
     }
   }
 
-  if (meta.crf !== '' && Number.isFinite(Number(meta.crf))) meta.crf = Number(meta.crf);
-
   const { sections } = splitSections(lines.slice(cursor), issues);
-  const global = { ignore: [], rules: '', readOrder: '', budget: '', root: '' };
-  const flows = [];
-  const seenIds = new Set();
+  const global: GlobalConfig = { ignore: [], readOrder: '', root: '' };
+  const flows: Flow[] = [];
+  const seenIds = new Set<string>();
 
   for (const section of sections) {
     if (section.kind === 'global') {
@@ -433,12 +408,8 @@ export function parseFlowFile(source) {
         if (key === 'ignore') {
           global.ignore.push(...blockPathList(block, issues, 'Global · ignore').map((entry) => entry.path));
           global.ignore = [...new Set(global.ignore)];
-        } else if (key === 'rules') {
-          global.rules = blockText(block);
         } else if (key === 'readOrder') {
           global.readOrder = blockText(block);
-        } else if (key === 'budget') {
-          global.budget = blockText(block);
         } else if (key === 'root') {
           global.root = blockText(block);
         }
@@ -446,8 +417,8 @@ export function parseFlowFile(source) {
       continue;
     }
 
-    const label = `Flow "${section.id}"`;
-    const id = section.id.trim();
+    const label = `Flow "${section.id ?? ''}"`;
+    const id = (section.id ?? '').trim();
 
     if (!FLOW_ID_RE.test(id)) {
       issues.push({
@@ -493,45 +464,14 @@ export function parseFlowFile(source) {
         case 'description':
           flow.description = blockText(block);
           break;
-        case 'triggers':
-          flow.triggers = [...new Set(blockList(block, issues, `${label} · triggers`).flatMap(splitInlineList))];
-          break;
-        case 'priority': {
-          const raw = blockText(block);
-          const number = Number.parseInt(raw, 10);
-          if (Number.isFinite(number)) flow.priority = number;
-          else if (raw) {
-            issues.push({
-              level: 'warning',
-              code: 'flow.priority',
-              message: `${label}: priority "${raw}" is not a number, using 0.`,
-            });
-          }
-          break;
-        }
         case 'includes':
           flow.includes = [...new Set(blockList(block, issues, `${label} · includes`).flatMap(splitInlineList))];
           break;
         case 'read':
           flow.read = blockPathList(block, issues, `${label} · read`);
           break;
-        case 'optional':
-          flow.optional = blockPathList(block, issues, `${label} · optional`);
-          break;
         case 'skip':
           flow.skip = blockPathList(block, issues, `${label} · skip`).map((entry) => entry.path);
-          break;
-        case 'budget':
-          flow.budget = blockText(block);
-          break;
-        case 'rules':
-          flow.rules = blockText(block);
-          break;
-        case 'steps':
-          flow.steps = blockList(block, issues, `${label} · steps`);
-          break;
-        case 'doneWhen':
-          flow.doneWhen = blockList(block, issues, `${label} · done when`);
           break;
         default:
           break;
@@ -553,9 +493,7 @@ export function parseFlowFile(source) {
     meta,
     global: {
       ignore: global.ignore,
-      rules: global.rules,
       readOrder: global.readOrder,
-      budget: global.budget,
       root: global.root || meta.root || '',
     },
     flows,
@@ -568,86 +506,160 @@ export function parseFlowFile(source) {
 /* Serializer                                                          */
 /* ------------------------------------------------------------------ */
 
-function pushList(out, key, items, formatter = (item) => item) {
+function pushList<T>(
+  out: string[],
+  key: string,
+  items: T[] | undefined,
+  formatter?: (item: T) => string,
+): void {
   if (!items?.length) return;
   out.push(`- ${key}:`);
-  for (const item of items) out.push(`  - ${formatter(item)}`);
-}
-
-function pushBlock(out, key, value) {
-  const text = String(value ?? '').replace(/\r\n?/g, '\n').trim();
-  if (!text) return;
-  const lines = text.split('\n');
-  const inline = lines.length === 1 && !lines[0].startsWith('- ');
-  if (inline) {
-    out.push(`- ${key}: ${lines[0]}`);
-    return;
-  }
-  out.push(`- ${key}:`);
-  for (const line of lines) {
-    out.push(line.trim() ? `  ${line}` : '');
-  }
+  for (const item of items) out.push(`  - ${formatter ? formatter(item) : String(item)}`);
 }
 
 /** Serialize a model into the canonical routing-context-flow markdown. */
-export function serializeFlowFile(model) {
-  const meta = model.meta ?? {};
-  const global = model.global ?? {};
-  const out = [];
+export function serializeFlowFile(model: Model): string {
+  const meta = model.meta;
+  const global = model.global;
+  const out: string[] = [];
 
   out.push('---');
   out.push(`crf: ${meta.crf ?? CRF_VERSION}`);
   if (oneLine(meta.name)) out.push(`name: ${oneLine(meta.name)}`);
   if (oneLine(meta.description)) out.push(`description: ${oneLine(meta.description)}`);
-  if (oneLine(meta.defaultBudget)) out.push(`default_budget: ${oneLine(meta.defaultBudget)}`);
   if (oneLine(meta.root)) out.push(`root: ${oneLine(meta.root)}`);
   out.push('---', '');
 
-  const globalHasContent =
-    global.ignore?.length || global.rules || global.readOrder || global.budget || global.root;
+  const globalHasContent = global.ignore?.length || global.readOrder || global.root;
 
   if (globalHasContent) {
     out.push('## Global', '');
     if (global.ignore?.length) pushList(out, 'ignore', global.ignore);
     if (global.readOrder) out.push(`- read order: ${oneLine(global.readOrder)}`);
-    if (global.budget) out.push(`- budget: ${oneLine(global.budget)}`);
     if (global.root) out.push(`- root: ${oneLine(global.root)}`);
-    if (global.rules) pushBlock(out, 'rules', global.rules);
     out.push('');
   }
 
   for (const flow of model.flows ?? []) {
     out.push(`## Flow: ${flow.id}`, '');
     if (oneLine(flow.description)) out.push(`- description: ${oneLine(flow.description)}`);
-    if (flow.triggers?.length) out.push(`- triggers: ${flow.triggers.join(', ')}`);
-    if (Number(flow.priority)) out.push(`- priority: ${Number(flow.priority)}`);
     if (flow.includes?.length) out.push(`- includes: ${flow.includes.join(', ')}`);
-    if (oneLine(flow.budget)) out.push(`- budget: ${oneLine(flow.budget)}`);
     pushList(out, 'read', flow.read, formatReadEntry);
-    pushList(out, 'optional', flow.optional, formatReadEntry);
     pushList(out, 'skip', flow.skip);
-    pushList(out, 'steps', flow.steps, (step) => step);
-    if (flow.rules) pushBlock(out, 'rules', flow.rules);
-    pushList(out, 'done when', flow.doneWhen);
     out.push('');
   }
 
   return `${trimBlankEdges(out).join('\n').trimEnd()}\n`;
 }
 
+function normalizeBuildPath(value: unknown): string {
+  return String(value ?? '')
+    .replace(/\\/g, '/')
+    .replace(/^\.\//, '')
+    .trim();
+}
+
+function mergeBuildFlow(
+  model: Model,
+  id: string,
+  stack: string[],
+): { description: string; read: ReadEntry[]; skip: string[] } {
+  const flow = model.flows.find((item) => item.id === id);
+  if (!flow || stack.includes(id)) return { description: '', read: [], skip: [] };
+
+  const merged = { description: flow.description, read: [], skip: [] } as {
+    description: string;
+    read: ReadEntry[];
+    skip: string[];
+  };
+  for (const include of flow.includes ?? []) {
+    const included = mergeBuildFlow(model, include, [...stack, id]);
+    merged.read.push(...included.read);
+    merged.skip.push(...included.skip);
+  }
+  merged.read.push(...(flow.read ?? []));
+  merged.skip.push(...(flow.skip ?? []));
+  return merged;
+}
+
+function uniqueBuildReads(entries: ReadEntry[]): ReadEntry[] {
+  const seen = new Set<string>();
+  return entries.filter((entry) => {
+    const key = normalizeBuildPath(entry.path);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function uniqueBuildStrings(values: string[]): string[] {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    const key = normalizeBuildPath(value);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/**
+ * Render a model as a linear, self-contained build file: one section per flow,
+ * includes already merged, globs preserved, skip/ignore collected.
+ */
+export function serializeBuildFile(
+  model: Model,
+  sourceName = 'routing-context-flow.md',
+): string {
+  const out: string[] = [];
+  out.push(`# Built routing${model.meta.name ? ` — ${model.meta.name}` : ''}`);
+  out.push(`# Generated from ${sourceName}. Do not edit.`);
+  out.push('');
+
+  if (!model.flows.length) {
+    out.push('_No flows._');
+    return `${out.join('\n').trimEnd()}\n`;
+  }
+
+  for (const flow of model.flows) {
+    const merged = mergeBuildFlow(model, flow.id, []);
+    const read = uniqueBuildReads(merged.read);
+    const skip = uniqueBuildStrings([...(model.global?.ignore ?? []), ...merged.skip]);
+
+    out.push(`## ${flow.id}`);
+    if (flow.description) out.push(flow.description);
+    out.push('');
+    out.push('Read these paths, in order:');
+    out.push('');
+    if (read.length) {
+      read.forEach((entry, index) => out.push(`${index + 1}. \`${entry.path}\``));
+    } else {
+      out.push('_Nothing._');
+    }
+    out.push('');
+    if (skip.length) {
+      out.push('Do not read:');
+      out.push('');
+      for (const pattern of skip) out.push(`- \`${pattern}\``);
+      out.push('');
+    }
+  }
+
+  return `${out.join('\n').trimEnd()}\n`;
+}
+
 /* ------------------------------------------------------------------ */
 /* Validation                                                          */
 /* ------------------------------------------------------------------ */
 
-function collectIncludes(model, id) {
+function collectIncludes(model: Model, id: string): string[] {
   const flow = model.flows.find((item) => item.id === id);
   return flow?.includes ?? [];
 }
 
-function hasCycle(model, start) {
-  const state = new Map();
+function hasCycle(model: Model, start: string): boolean {
+  const state = new Map<string, 'visiting' | 'done'>();
 
-  function visit(id, stack) {
+  function visit(id: string, stack: string[]): boolean {
     if (state.get(id) === 'done') return false;
     if (state.get(id) === 'visiting') return stack.includes(id);
     state.set(id, 'visiting');
@@ -664,13 +676,11 @@ function hasCycle(model, start) {
 /**
  * Validate a parsed model. Structural checks only; path checks live in the
  * resolver because they need the filesystem.
- * @returns {Array<{level: string, code: string, message: string, flow?: string}>}
  */
-export function validateModel(model) {
-  const issues = [];
+export function validateModel(model: Model): Issue[] {
+  const issues: Issue[] = [];
   const flows = model.flows ?? [];
-  const ids = new Set();
-  const triggerOwners = new Map();
+  const ids = new Set<string>();
 
   for (const flow of flows) {
     if (!FLOW_ID_RE.test(flow.id)) {
@@ -691,22 +701,6 @@ export function validateModel(model) {
     }
     ids.add(flow.id);
 
-    for (const trigger of flow.triggers ?? []) {
-      const key = normalizeText(trigger);
-      if (!key) continue;
-      const owner = triggerOwners.get(key);
-      if (owner && owner !== flow.id) {
-        issues.push({
-          level: 'warning',
-          code: 'trigger.duplicate',
-          message: `Trigger "${trigger}" is used by both "${owner}" and "${flow.id}"; inference will be ambiguous.`,
-          flow: flow.id,
-        });
-      } else {
-        triggerOwners.set(key, flow.id);
-      }
-    }
-
     for (const include of flow.includes ?? []) {
       if (!ids.has(include) && !flows.some((item) => item.id === include)) {
         issues.push({
@@ -723,24 +717,6 @@ export function validateModel(model) {
         level: 'warning',
         code: 'flow.read.empty',
         message: `Flow "${flow.id}" does not read anything (no read entries, no includes).`,
-        flow: flow.id,
-      });
-    }
-
-    if (flow.budget && parseBudget(flow.budget) === null) {
-      issues.push({
-        level: 'warning',
-        code: 'budget.invalid',
-        message: `Flow "${flow.id}": budget "${flow.budget}" is not understood (use e.g. 60k or 120000).`,
-        flow: flow.id,
-      });
-    }
-
-    if (Number.isNaN(Number(flow.priority))) {
-      issues.push({
-        level: 'warning',
-        code: 'flow.priority',
-        message: `Flow "${flow.id}": priority is not a number.`,
         flow: flow.id,
       });
     }
@@ -795,14 +771,6 @@ export function validateModel(model) {
     });
   }
 
-  if (model.global?.budget && parseBudget(model.global.budget) === null) {
-    issues.push({
-      level: 'warning',
-      code: 'budget.invalid',
-      message: `Global budget "${model.global.budget}" is not understood.`,
-    });
-  }
-
   return issues;
 }
 
@@ -810,11 +778,11 @@ export function validateModel(model) {
 /* Lookup and ranking                                                  */
 /* ------------------------------------------------------------------ */
 
-export function getFlow(model, id) {
+export function getFlow(model: Model, id: string): Flow | null {
   return (model.flows ?? []).find((flow) => flow.id === id) ?? null;
 }
 
-function normalizeText(value) {
+function normalizeText(value: unknown): string {
   return String(value ?? '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -825,10 +793,9 @@ function normalizeText(value) {
 
 /**
  * Rank flows against a free-form task description.
- * Used by the CLI (`pick`) and by the skill to resolve ambiguous intents.
- * @returns {Array<{flow: object, score: number, reasons: string[]}>}
+ * Used by the skill to resolve ambiguous intents.
  */
-export function rankFlows(model, task) {
+export function rankFlows(model: Model, task: unknown): RankedFlow[] {
   const query = normalizeText(task);
   if (!query) return [];
   const words = new Set(query.split(/[^a-z0-9]+/).filter((word) => word.length > 2));
@@ -841,15 +808,6 @@ export function rankFlows(model, task) {
       if (query === normalizeText(flow.id)) {
         score += 100;
         reasons.push('flow id');
-      }
-
-      for (const trigger of flow.triggers ?? []) {
-        const normalized = normalizeText(trigger);
-        if (!normalized) continue;
-        if (new RegExp(`(^|[^a-z0-9])${escapeRegex(normalized)}([^a-z0-9]|$)`).test(query)) {
-          score += 6 + Math.min(normalized.length, 18) / 3;
-          reasons.push(`trigger "${trigger}"`);
-        }
       }
 
       const description = normalizeText(flow.description);
@@ -867,14 +825,10 @@ export function rankFlows(model, task) {
         reasons.push('flow id match');
       }
 
-      if (score > 0) score += Number(flow.priority || 0) / 1000;
-
       return { flow, score, reasons };
     })
     .filter((item) => item.score > 0)
     .sort((a, b) => b.score - a.score || a.flow.id.localeCompare(b.flow.id));
 }
 
-function escapeRegex(value) {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
+

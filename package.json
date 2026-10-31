@@ -4,7 +4,7 @@
   "description": "Route what an AI agent reads: declare flows in routing-context-flow.md and load only the files each task needs.",
   "type": "module",
   "bin": {
-    "context-preload": "./bin/context-preload.mjs"
+    "context-preload": "./bin/context-preload.ts"
   },
   "files": [
     "bin",
@@ -12,7 +12,6 @@
     "editor",
     "scripts",
     "docs",
-    "schema",
     "examples",
     "SKILL.md",
     "README.md",
@@ -20,7 +19,7 @@
     "LICENSE"
   ],
   "engines": {
-    "node": ">=18.18"
+    "node": ">=22.18"
   },
   "repository": {
     "type": "git",
@@ -32,9 +31,11 @@
   "homepage": "https://github.com/BruceGitHub/context-preload-skill#readme",
   "scripts": {
     "test": "node --test",
-    "build:editor": "node scripts/build-editor.mjs",
-    "validate:examples": "node bin/context-preload.mjs validate routing-context-flow.md && node bin/context-preload.mjs validate examples/minimal-routing-context-flow.md",
-    "check": "npm run build:editor && npm run validate:examples && npm test"
+    "typecheck": "tsc --noEmit",
+    "build:routing": "node bin/context-preload.ts build",
+    "build:editor": "node --disable-warning=ExperimentalWarning scripts/build-editor.mjs",
+    "validate:examples": "node bin/context-preload.ts validate routing-context-flow.md && node bin/context-preload.ts validate examples/minimal-routing-context-flow.md",
+    "check": "npm run typecheck && npm run build:routing && npm run build:editor && npm run validate:examples && npm test"
   },
   "keywords": [
     "ai",
@@ -48,5 +49,9 @@
     "prompt-engineering"
   ],
   "author": "BruceGitHub",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2"
+  }
 }

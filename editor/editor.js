@@ -1,9 +1,15 @@
-/* context-preload · editor UI
- * Loaded after the core (inlined by scripts/build-editor.mjs).
- * Everything here is offline: no network, no external assets.
+/* CRC · editor/editor.js
+ *
+ * Scopo: logica della UI browser dell'editor: form Global/flussi, modalità
+ * Raw/Visual, preview, import/export, tema e autosave.
+ * Collaboratori: editor/template.html (markup e stili), core crf-core.ts
+ * inlinato da scripts/build-editor.mjs, API browser (DOM, localStorage,
+ * clipboard).
+ * Consumatori: editor/index.html (generato).
  */
 
 const STORAGE_KEY = 'context-preload-editor-v1';
+const THEME_KEY = 'context-preload-theme';
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
@@ -40,31 +46,23 @@ function starterModel() {
     meta: {
       name: 'my-project',
       description: 'Context routing for my-project.',
-      defaultBudget: '60k',
       root: '',
     },
     global: {
       ignore: ['node_modules/**', 'dist/**', '.git/**'],
       readOrder: 'first the files touched by the task, then the tests, then the surrounding code.',
-      rules: '- Read only what the flow declares; if you need more, say so before reading it.',
     },
     flows: [
       createFlow('review', {
         description: 'Review a change without rewriting it.',
-        triggers: ['review', 'pr', 'diff'],
         read: [
           { path: 'src/**', note: 'code under review' },
           { path: 'tests/**', note: 'existing expectations' },
         ],
-        steps: ['Read the diff.', 'Look for regressions and missing tests.'],
-        rules: '- Report only concrete problems, with file and line.',
-        doneWhen: ['Every finding has file:line and a proposed fix.'],
       }),
       createFlow('coding', {
         description: 'Implement a feature or a fix.',
-        triggers: ['coding', 'implement', 'fix'],
         read: [{ path: 'src/**', note: '' }],
-        doneWhen: ['I test passano.'],
       }),
     ],
   });
@@ -152,7 +150,7 @@ function globalTemplate() {
     <div class="panel-head">
       <div>
         <h2>Global</h2>
-        <p>Rules and paths that apply to every flow.</p>
+        <p>Paths and read order that apply to every flow.</p>
       </div>
     </div>
     <div class="form-grid">
@@ -160,14 +158,6 @@ function globalTemplate() {
       ${field('Root', 'root', meta.root, {
         placeholder: 'empty = folder of the routing file',
         hint: 'Relative to the location of the routing file.',
-      })}
-      ${field('Global budget', 'budget', global.budget, {
-        placeholder: 'e.g. 60k',
-        hint: 'Overridden by a flow budget.',
-      })}
-      ${field('Fallback budget', 'defaultBudget', meta.defaultBudget, {
-        placeholder: 'e.g. 60k',
-        hint: 'Used only when both the flow and the global budget are empty.',
       })}
       ${field('Description', 'description', meta.description, { full: true })}
       ${field('Always ignore', 'ignore', (global.ignore ?? []).join('\n'), {
@@ -178,11 +168,6 @@ function globalTemplate() {
       ${field('Read order', 'readOrder', global.readOrder, {
         full: true,
         placeholder: 'first the files touched by the task, then the tests',
-      })}
-      ${field('Global rules', 'rules', global.rules, {
-        rows: 4,
-        full: true,
-        hint: 'Free-form Markdown, valid for every flow.',
       })}
     </div>`;
 }
@@ -212,53 +197,20 @@ function flowTemplate(flow) {
         placeholder: 'review',
         hint: 'Lowercase letters, numbers, <code>-</code> and <code>_</code>.',
       })}
-      ${field('Priority', 'priority', flow.priority, {
-        type: 'number',
-        hint: 'Used when several flows are compatible.',
-      })}
       ${field('Description', 'description', flow.description, { full: true })}
-      ${field('Triggers', 'triggers', (flow.triggers ?? []).join(', '), {
-        full: true,
-        placeholder: 'review, pr, diff, check',
-        hint: 'Comma separated: the skill uses them to infer the flow.',
-      })}
       ${field('Includes', 'includes', (flow.includes ?? []).join(', '), {
         list: 'flow-ids',
-        hint: 'Inherits read, rules and steps from other flows.',
-      })}
-      ${field('Budget', 'budget', flow.budget, {
-        placeholder: 'empty = global',
-        hint: 'E.g. <code>60k</code> or <code>120000</code>.',
+        hint: 'Inherits read and skip from other flows.',
       })}
       ${field('Read', 'read', entriesToText(flow.read), {
         rows: 7,
         full: true,
         hint: 'One path per line: <code>`src/**/*.ts | note`</code>. Globs: <code>*</code>, <code>**</code>, <code>?</code>, <code>{a,b}</code>.',
       })}
-      ${field('Optional', 'optional', entriesToText(flow.optional), {
-        rows: 3,
-        full: true,
-        hint: 'Like read, but the skill loads them only if needed.',
-      })}
       ${field('Skip', 'skip', (flow.skip ?? []).join('\n'), {
         rows: 3,
         full: true,
         hint: 'Globs excluded from this flow, even if read includes them.',
-      })}
-      ${field('Steps', 'steps', (flow.steps ?? []).join('\n'), {
-        rows: 5,
-        full: true,
-        hint: 'One step per line, in order.',
-      })}
-      ${field('Rules', 'rules', flow.rules, {
-        rows: 5,
-        full: true,
-        hint: 'Free-form Markdown: constraints on how to work.',
-      })}
-      ${field('Done when', 'doneWhen', (flow.doneWhen ?? []).join('\n'), {
-        rows: 4,
-        full: true,
-        hint: 'One completion criterion per line.',
       })}
     </div>`;
 }
@@ -372,8 +324,8 @@ function onField(input, flow) {
 
   if (!flow) {
     if (key === 'ignore') state.model.global.ignore = toLines(value);
-    else if (key === 'readOrder' || key === 'rules' || key === 'budget') state.model.global[key] = value;
-    else if (key === 'name' || key === 'description' || key === 'defaultBudget' || key === 'root') {
+    else if (key === 'readOrder') state.model.global[key] = value;
+    else if (key === 'name' || key === 'description' || key === 'root') {
       state.model.meta[key] = value;
     }
   } else {
@@ -382,33 +334,16 @@ function onField(input, flow) {
         flow.id = value;
         state.selected = value;
         break;
-      case 'triggers':
-        flow.triggers = toCommaList(value);
-        break;
       case 'includes':
         flow.includes = toCommaList(value);
-        break;
-      case 'priority':
-        flow.priority = Number(value) || 0;
         break;
       case 'read':
         flow.read = toEntries(value);
         break;
-      case 'optional':
-        flow.optional = toEntries(value);
-        break;
       case 'skip':
         flow.skip = toLines(value);
         break;
-      case 'steps':
-        flow.steps = toLines(value);
-        break;
-      case 'doneWhen':
-        flow.doneWhen = toLines(value);
-        break;
       case 'description':
-      case 'budget':
-      case 'rules':
         flow[key] = value;
         break;
       default:
@@ -512,10 +447,7 @@ function onAction(event) {
 /* Import / export                                                     */
 /* ------------------------------------------------------------------ */
 
-function download() {
-  const text = currentText();
-  const raw = state.fileName.trim() || 'routing-context-flow.md';
-  const fileName = raw.toLowerCase().endsWith('.md') ? raw : `${raw}.md`;
+function downloadText(text, fileName) {
   const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -525,6 +457,29 @@ function download() {
   link.click();
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function download() {
+  const raw = state.fileName.trim() || 'routing-context-flow.md';
+  const fileName = raw.toLowerCase().endsWith('.md') ? raw : `${raw}.md`;
+  downloadText(currentText(), fileName);
+  toast(`Downloaded ${fileName}`);
+}
+
+function downloadBuild() {
+  let model = state.model;
+  if (state.raw) {
+    const parsed = parseFlowFile(state.rawText);
+    if (parsed.issues.some((issue) => issue.level === 'error')) {
+      toast('Fix the errors before building');
+      return;
+    }
+    model = parsed.model;
+  }
+  const raw = state.fileName.trim() || 'routing-context-flow.md';
+  const base = raw.toLowerCase().endsWith('.md') ? raw.slice(0, -3) : raw;
+  const fileName = `${base}.build.md`;
+  downloadText(serializeBuildFile(model, raw), fileName);
   toast(`Downloaded ${fileName}`);
 }
 
@@ -680,6 +635,31 @@ function restoreDraft() {
   }
 }
 
+function currentTheme() {
+  return document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+}
+
+function renderTheme() {
+  const button = $('#btn-theme');
+  if (!button) return;
+  const light = currentTheme() === 'light';
+  const label = light ? 'Switch to dark theme' : 'Switch to light theme';
+  button.textContent = light ? '☾' : '☀';
+  button.title = label;
+  button.setAttribute('aria-label', label);
+}
+
+function toggleTheme() {
+  const next = currentTheme() === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = next;
+  try {
+    localStorage.setItem(THEME_KEY, next);
+  } catch {
+    /* storage might be disabled: the in-memory theme still works */
+  }
+  renderTheme();
+}
+
 let toastTimer;
 
 function toast(message) {
@@ -702,6 +682,7 @@ function wire() {
     scheduleSave();
   });
 
+  $('#btn-theme').addEventListener('click', toggleTheme);
   $('#btn-import').addEventListener('click', () => $('#file-input').click());
   $('#file-input').addEventListener('change', async (event) => {
     const file = event.target.files?.[0];
@@ -711,6 +692,7 @@ function wire() {
 
   $('#btn-new').addEventListener('click', resetModel);
   $('#btn-download').addEventListener('click', download);
+  $('#btn-build').addEventListener('click', downloadBuild);
   $('#btn-copy').addEventListener('click', copyText);
   $('#btn-mode').addEventListener('click', toggleMode);
 
@@ -770,6 +752,7 @@ function wire() {
 
 function init() {
   wire();
+  renderTheme();
 
   const bootstrap = window.__CRF_BOOTSTRAP__;
   if (bootstrap && typeof bootstrap.text === 'string') {

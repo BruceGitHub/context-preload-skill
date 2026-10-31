@@ -1,11 +1,32 @@
 <!DOCTYPE html>
-<html lang="en">
+<!--
+  CRC · editor/template
+  Scopo: struttura, stili e placeholder dell'editor visuale.
+  Collaboratori: editor/editor.js, src/crf-core.ts (inlinato dal build).
+  Consumatori: scripts/build-editor.mjs → editor/index.html.
+-->
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>context-preload · routing editor</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsPSJjb250ZXh0LXByZWxvYWQiPgogIDxyZWN0IHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCIgcng9IjE0IiBmaWxsPSIjMGIwZjE0Ii8+CiAgPHBhdGggZD0iTTMyIDkgNTUgMzIgMzIgNTUgOSAzMloiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzNkZGM5NyIgc3Ryb2tlLXdpZHRoPSIzIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+CiAgPHBhdGggZD0iTTIwIDMyaDdsNC04IDQgMTYgNC04aDUiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzNkZGM5NyIgc3Ryb2tlLXdpZHRoPSIyLjYiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgogIDxjaXJjbGUgY3g9IjIwIiBjeT0iMzIiIHI9IjIuNCIgZmlsbD0iIzY2YjNmZiIvPgogIDxjaXJjbGUgY3g9IjQ0IiBjeT0iMzIiIHI9IjIuNCIgZmlsbD0iIzY2YjNmZiIvPgo8L3N2Zz4K">
+<meta name="theme-color" content="#0b0f14">
+<script>
+  (() => {
+    try {
+      const saved = localStorage.getItem('context-preload-theme');
+      if (saved === 'light' || saved === 'dark') {
+        document.documentElement.dataset.theme = saved;
+      }
+    } catch {
+      /* storage might be disabled: keep the dark default */
+    }
+  })();
+</script>
 <style>
   :root {
+    color-scheme: dark;
     --bg: #0b0f14;
     --panel: #111823;
     --panel-2: #0d131b;
@@ -23,23 +44,22 @@
     --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   }
 
-  @media (prefers-color-scheme: light) {
-    :root {
-      --bg: #f5f7fa;
-      --panel: #ffffff;
-      --panel-2: #f7f9fc;
-      --panel-3: #eef2f7;
-      --line: #d8e0ea;
-      --text: #17202b;
-      --muted: #5f6d80;
-      --accent: #0f9d68;
-      --accent-soft: rgba(15, 157, 104, 0.1);
-      --accent-2: #1667c6;
-      --danger: #c4314b;
-      --danger-soft: rgba(196, 49, 75, 0.08);
-      --warn: #9a6b00;
-      --shadow: 0 8px 24px rgba(20, 35, 55, 0.1);
-    }
+  html[data-theme='light'] {
+    color-scheme: light;
+    --bg: #f5f7fa;
+    --panel: #ffffff;
+    --panel-2: #f7f9fc;
+    --panel-3: #eef2f7;
+    --line: #d8e0ea;
+    --text: #17202b;
+    --muted: #5f6d80;
+    --accent: #0f9d68;
+    --accent-soft: rgba(15, 157, 104, 0.1);
+    --accent-2: #1667c6;
+    --danger: #c4314b;
+    --danger-soft: rgba(196, 49, 75, 0.08);
+    --warn: #9a6b00;
+    --shadow: 0 8px 24px rgba(20, 35, 55, 0.1);
   }
 
   * { box-sizing: border-box; }
@@ -380,10 +400,12 @@
     <input id="filename" class="filename" value="routing-context-flow.md" aria-label="Name of the file to download" spellcheck="false">
     <div class="spacer"></div>
     <div class="actions">
+      <button class="btn ghost icon" id="btn-theme" type="button" title="Switch to light theme" aria-label="Switch to light theme">☀</button>
       <button class="btn ghost" id="btn-mode" type="button" title="Edit the file as free text">Raw</button>
       <button class="btn ghost" id="btn-import" type="button">Import</button>
       <button class="btn ghost" id="btn-new" type="button">New</button>
       <button class="btn ghost" id="btn-copy" type="button">Copy</button>
+      <button class="btn ghost" id="btn-build" type="button" title="Download the built routing file">Build</button>
       <button class="btn primary" id="btn-download" type="button">Download .md</button>
     </div>
   </header>
@@ -392,7 +414,7 @@
     <aside class="sidebar">
       <button class="global-item" id="btn-global" type="button">
         <span class="flow-id">⚙ global</span>
-        <span class="flow-desc">ignore, rules, order</span>
+        <span class="flow-desc">ignore, order</span>
       </button>
 
       <div class="side-head">

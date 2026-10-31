@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 /**
- * Build the single-file editor: inline the shared core and the UI code into
- * editor/template.html, producing editor/index.html.
+ * CRC · scripts/build-editor
  *
- * Keeping one generated file means the editor works offline, straight from
- * file://, without a dev server or a bundler.
+ * Scopo: costruire l'editor in un unico file HTML, rimuovendo i tipi dal core
+ * e inlinando core + UI nel template.
+ * Collaboratori: src/crf-core.ts, editor/template.html, editor/editor.js,
+ * node:module (`stripTypeScriptTypes`), node:fs, node:path.
+ * Consumatori: `npm run build:editor`, la CI e editor/index.html.
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { stripTypeScriptTypes } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -16,7 +19,7 @@ const read = (relative) => fs.readFileSync(path.join(ROOT, relative), 'utf8');
 const write = (relative, content) => fs.writeFileSync(path.join(ROOT, relative), content);
 
 const template = read('editor/template.html');
-const core = read('src/crf-core.mjs');
+const core = stripTypeScriptTypes(read('src/crf-core.ts'), { mode: 'strip' });
 const editor = read('editor/editor.js');
 
 for (const placeholder of ['/*__CRF_CORE__*/', '/*__EDITOR__*/']) {
