@@ -291,21 +291,31 @@ Each master produces its own build:
 ```bash
 context-preload validate --file docs/routing-context-flow.backend.md
 context-preload build --file docs/routing-context-flow.backend.md
-# → docs/routing-context-flow.backend.build.md
+# → docs/routing-context-flow.backend.build.md (index)
+# → docs/routing-context-flow.backend.<flow>.build.md (per flow)
 ```
 
 Nothing is global or cached: each invocation reads the file you point at.
 
 ## 11. Build files
 
-`context-preload build` writes `<name>.build.md` next to the master:
+`context-preload build` writes an index plus one file per flow:
 
-- one `## <id>` section per flow; the conventional helper `base` is omitted
-  when other flows include it, because its content is already merged;
+```text
+routing-context-flow.build.md          # index: ids + descriptions, no paths
+routing-context-flow.review.build.md   # only review
+routing-context-flow.coding.build.md   # only coding
+```
+
+The index contains only flow ids and descriptions. Each flow file contains:
+
+- one `## <id>` section;
 - `includes` already merged;
 - `read` paths in order, globs preserved;
 - global `ignore` and flow `skip` collected under **Do not read**;
-- no front matter, no `includes`, no extra syntax.
+- a `STOP — end of flow <id>` line at the end.
 
-The skill reads the build file, not the master. If the build is missing, it
-stops and asks you to run `context-preload build`.
+The conventional helper `base` gets no file when other flows include it, because
+its content is already merged. The skill reads the index, chooses one flow and
+reads only that flow file. If the index or the flow file is missing, it stops
+and asks you to run `context-preload build`.

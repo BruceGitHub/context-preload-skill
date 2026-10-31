@@ -55,16 +55,28 @@ test('validate exits 1 on structural errors', () => {
   assert.equal(broken.status, 1);
 });
 
-test('build writes the generated file', () => {
-  const target = path.join(path.dirname(FIXTURE), 'routing-context-flow.build.md');
+test('build writes the index and one file per flow', () => {
+  const dir = path.dirname(FIXTURE);
+  const index = path.join(dir, 'routing-context-flow.build.md');
+  const review = path.join(dir, 'routing-context-flow.review.build.md');
   try {
     const output = run(['build', FIXTURE]);
     assert.match(output, /built/);
-    const text = fs.readFileSync(target, 'utf8');
-    assert.match(text, /## review/);
-    assert.match(text, /Do not read:/);
+
+    const indexText = fs.readFileSync(index, 'utf8');
+    assert.match(indexText, /- `review`/);
+    assert.doesNotMatch(indexText, /`src\//);
+
+    const flowText = fs.readFileSync(review, 'utf8');
+    assert.match(flowText, /## review/);
+    assert.match(flowText, /Do not read:/);
+    assert.match(flowText, /STOP — end of flow `review`/);
+    assert.doesNotMatch(flowText, /## coding/);
   } finally {
-    fs.rmSync(target, { force: true });
+    fs.rmSync(index, { force: true });
+    for (const id of ['base', 'review', 'coding', 'broken']) {
+      fs.rmSync(path.join(dir, `routing-context-flow.${id}.build.md`), { force: true });
+    }
   }
 });
 

@@ -19,7 +19,8 @@ import {
   parseFlowFile,
   parseReadEntry,
   rankFlows,
-  serializeBuildFile,
+  serializeBuildFlow,
+  serializeBuildIndex,
   serializeFlowFile,
   validateModel,
 } from '../src/crf-core.ts';
@@ -101,18 +102,29 @@ test('serializer round-trips the fixture', () => {
   assert.equal(issues.filter((issue) => issue.level === 'error').length, 0);
 });
 
-test('build expands includes and collects skip/ignore', () => {
+test('build index lists selectable flows without paths', () => {
   const { model } = parseFlowFile(SOURCE);
-  const text = serializeBuildFile(model, 'routing-context-flow.md');
+  const text = serializeBuildIndex(model, 'routing-context-flow.md');
 
-  assert.match(text, /# Built routing — fixture/);
-  assert.match(text, /## review/);
+  assert.match(text, /# Routing index — fixture/);
+  assert.match(text, /- `review`/);
+  assert.doesNotMatch(text, /`src\//);
   assert.doesNotMatch(text, /## base/);
+});
+
+test('build flow expands includes and collects skip/ignore', () => {
+  const { model } = parseFlowFile(SOURCE);
+  const text = serializeBuildFlow(model, 'review', 'routing-context-flow.md');
+
+  assert.match(text, /# Built routing — review — fixture/);
+  assert.match(text, /## review/);
   assert.match(text, /1\. `src\/core\/\*\*\/\*\.ts`/);
   assert.match(text, /`src\/api\/\*\*\/\*\.ts`/);
   assert.match(text, /Do not read:/);
   assert.match(text, /`node_modules\/\*\*`/);
   assert.match(text, /`docs\/legacy\/\*\*`/);
+  assert.match(text, /STOP — end of flow `review`/);
+  assert.doesNotMatch(text, /## coding/);
   assert.doesNotMatch(text, /- includes:/);
 });
 

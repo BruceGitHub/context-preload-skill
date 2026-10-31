@@ -13,26 +13,26 @@ flow lists exactly which files to read and in which order.
 Your job: pick the right flow, load its context, then **do the user's task
 normally**. You are not a routing report generator.
 
-## 1. Find the build file
+## 1. Find the build index
 
-The skill reads the **generated build file**, never the master. Search in this
+The skill reads the **generated build index**, never the master. Search in this
 order:
 
 1. A path the user named explicitly.
 2. `routing-context-flow.build.md` in the repository root.
 3. `.context/routing-context-flow.build.md`.
-4. Walk up from the current directory until a build file is found.
+4. Walk up from the current directory until an index is found.
 
 If none exists, say so and stop:
 
 ```
-No routing build file found. Run `context-preload build` (or use the editor's
+No routing build index found. Run `context-preload build` (or use the editor's
 Build button) and try again.
 ```
 
 Do not read `routing-context-flow.md` instead, and do not read the whole repo.
 The master is the source used by the editor and the CLI; the skill only consumes
-the build.
+the index and the selected flow file.
 
 ## 2. Choose the flow
 
@@ -86,18 +86,24 @@ which one you used.
 
 ## 3. Load the context
 
-Read the build file once. It is already resolved: includes are merged, there is
-no `Global` section and each flow is a self-contained block.
+Read the index once. It lists flow ids and descriptions only; it contains no
+file paths.
 
-1. Select the `## <id>` section (see section 2).
-2. Read the **Read these paths, in order** list, top to bottom.
-3. Expand globs with your file tools. Read each file **once**, even if several
+1. Select a flow (see section 2).
+2. Build the flow file path: take the index path, remove `.build.md`, and append
+   `.<flow>.build.md`. Example:
+   `routing-context-flow.build.md` → `routing-context-flow.review.build.md`.
+3. Read **only** that file. If it is missing, say so and stop; do not read the
+   master or another flow file.
+4. Stop at the `STOP — end of flow` line.
+5. Read the **Read these paths, in order** list, top to bottom.
+6. Expand globs with your file tools. Read each file **once**, even if several
    paths match it.
-4. Never read anything listed under **Do not read**.
-5. If a path is a directory, open only the files inside it that the task needs.
+7. Never read anything listed under **Do not read**.
+8. If a path is a directory, open only the files inside it that the task needs.
 
 Missing paths and empty globs are warnings, not permission to read something
-else. If the build has no flow sections, say so and stop.
+else. If the index has no flows, say so and stop.
 
 ## 4. Do the task normally
 
@@ -148,8 +154,9 @@ When the user wants to change what gets read:
 - after editing, run `context-preload validate` and `context-preload build`;
 - keep the canonical shape described in `docs/language.md`.
 
-The master and the generated `.build.md` are meant to be versioned with the
-repository; the skill reads the build, not the master.
+The master, the index and the per-flow `.build.md` files are meant to be
+versioned with the repository; the skill reads the index and one flow file,
+never the master.
 
 ## Quick reference
 

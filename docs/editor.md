@@ -37,8 +37,13 @@ xdg-open editor/index.html
 ## Master and build
 
 The editor edits the **master** routing file. **Download .md** saves the master;
-**Build** downloads the generated `<name>.build.md`, the same file the CLI
-produces with:
+**Build all** downloads the index plus one file per flow:
+
+- `<name>.build.md` (index);
+- `<name>.<flow>.build.md` for every flow.
+
+The browser may ask to allow multiple downloads. The CLI writes the same files
+with:
 
 ```bash
 context-preload build path/to/routing-context-flow.md

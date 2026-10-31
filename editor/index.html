@@ -406,7 +406,7 @@
       <button class="btn ghost" id="btn-import" type="button">Import</button>
       <button class="btn ghost" id="btn-new" type="button">New</button>
       <button class="btn ghost" id="btn-copy" type="button">Copy</button>
-      <button class="btn ghost" id="btn-build" type="button" title="Download the built routing file">Build</button>
+      <button class="btn ghost" id="btn-build" type="button" title="Download the index and every flow build">Build all</button>
       <button class="btn primary" id="btn-download" type="button">Download .md</button>
     </div>
   </header>
@@ -1059,47 +1059,81 @@ function uniqueBuildStrings(values          )           {
 }
 
 /**
- * Render a model as a linear, self-contained build file: one section per flow,
- * includes already merged, globs preserved, skip/ignore collected.
+ * Flows that deserve their own build file. `base` is the conventional
+ * include-only helper: its content is merged into every flow that includes it,
+ * so it needs no standalone file.
  */
-function serializeBuildFile(
+function buildableFlows(model       )         {
+  const includedIds = new Set(model.flows.flatMap((flow) => flow.includes ?? []));
+  return model.flows.filter((flow) => !(flow.id === 'base' && includedIds.has('base')));
+}
+
+/** Render the index: flow ids and descriptions only, never file paths. */
+function serializeBuildIndex(
   model       ,
   sourceName = 'routing-context-flow.md',
 )         {
   const out           = [];
-  out.push(`# Built routing${model.meta.name ? ` — ${model.meta.name}` : ''}`);
+  out.push(`# Routing index${model.meta.name ? ` — ${model.meta.name}` : ''}`);
   out.push(`# Generated from ${sourceName}. Do not edit.`);
+  out.push('# Choose one flow, then read the corresponding <name>.<flow>.build.md.');
   out.push('');
 
-  if (!model.flows.length) {
+  const flows = buildableFlows(model);
+  if (!flows.length) {
     out.push('_No flows._');
     return `${out.join('\n').trimEnd()}\n`;
   }
 
-  for (const flow of model.flows) {
-    const merged = mergeBuildFlow(model, flow.id, []);
-    const read = uniqueBuildReads(merged.read);
-    const skip = uniqueBuildStrings([...(model.global?.ignore ?? []), ...merged.skip]);
+  for (const flow of flows) {
+    const description = flow.description ? ` — ${flow.description}` : '';
+    out.push(`- \`${flow.id}\`${description}`);
+  }
+  return `${out.join('\n').trimEnd()}\n`;
+}
 
-    out.push(`## ${flow.id}`);
-    if (flow.description) out.push(flow.description);
-    out.push('');
-    out.push('Read these paths, in order:');
-    out.push('');
-    if (read.length) {
-      read.forEach((entry, index) => out.push(`${index + 1}. \`${entry.path}\``));
-    } else {
-      out.push('_Nothing._');
-    }
-    out.push('');
-    if (skip.length) {
-      out.push('Do not read:');
-      out.push('');
-      for (const pattern of skip) out.push(`- \`${pattern}\``);
-      out.push('');
-    }
+/** Render one flow as a strict, self-contained build file. */
+function serializeBuildFlow(
+  model       ,
+  flowId        ,
+  sourceName = 'routing-context-flow.md',
+)         {
+  const flow = model.flows.find((item) => item.id === flowId);
+  if (!flow) {
+    return `# Built routing — ${flowId}\n# Flow not found in ${sourceName}.\n`;
   }
 
+  const merged = mergeBuildFlow(model, flow.id, []);
+  const read = uniqueBuildReads(merged.read);
+  const skip = uniqueBuildStrings([...(model.global?.ignore ?? []), ...merged.skip]);
+
+  const out           = [];
+  out.push(
+    `# Built routing — ${flow.id}${model.meta.name ? ` — ${model.meta.name}` : ''}`,
+  );
+  out.push(`# Generated from ${sourceName}. Do not edit.`);
+  out.push(`# Read only this file for flow \`${flow.id}\`.`);
+  out.push('');
+  out.push(`## ${flow.id}`);
+  if (flow.description) out.push(flow.description);
+  out.push('');
+  out.push('Read these paths, in order:');
+  out.push('');
+  if (read.length) {
+    read.forEach((entry, index) => out.push(`${index + 1}. \`${entry.path}\``));
+  } else {
+    out.push('_Nothing._');
+  }
+  out.push('');
+  if (skip.length) {
+    out.push('Do not read:');
+    out.push('');
+    for (const pattern of skip) out.push(`- \`${pattern}\``);
+    out.push('');
+  }
+  out.push('---');
+  out.push(`STOP — end of flow \`${flow.id}\`. Do not read anything else.`);
+  out.push('---');
   return `${out.join('\n').trimEnd()}\n`;
 }
 
@@ -1512,14 +1546,14 @@ function rawTemplate() {
     <div class="panel-head">
       <div>
         <h2>Free text</h2>
-        <p>The skill reads this file as instructions. Structured flows are optional.</p>
+        <p>A draft. To build it and use it with the skill, add structured flows.</p>
       </div>
     </div>
     <div class="form-grid">
       <label class="field full">
         <span class="label">Routing file</span>
         <textarea id="raw-text" rows="26" spellcheck="false">${esc(state.rawText)}</textarea>
-        <small>Example: <code>When I am doing a review, read these files:</code> followed by the list. Switch to <b>Visual</b> when the file uses <code>## Flow:</code> sections.</small>
+        <small>Switch to <b>Visual</b> and add <code>## Flow:</code> sections to build it.</small>
       </label>
     </div>`;
 }
@@ -1585,7 +1619,7 @@ function renderPreview() {
 
   if (!issues.length) {
     $('#issues').innerHTML = state.raw
-      ? '<p class="muted">Free text: the skill interprets it directly. Use structured <code>## Flow:</code> sections if you want <code>context-preload validate</code> and glob expansion.</p>'
+      ? '<p class="muted">Free text is not buildable. Use structured <code>## Flow:</code> sections to generate the build and validate paths.</p>'
       : '<p class="muted">Valid structure. Paths are checked by <code>context-preload validate</code>.</p>';
     return;
   }
@@ -1770,9 +1804,19 @@ function downloadBuild() {
   }
   const raw = state.fileName.trim() || 'routing-context-flow.md';
   const base = raw.toLowerCase().endsWith('.md') ? raw.slice(0, -3) : raw;
-  const fileName = `${base}.build.md`;
-  downloadText(serializeBuildFile(model, raw), fileName);
-  toast(`Downloaded ${fileName}`);
+  const flows = buildableFlows(model);
+  const files = [
+    { name: `${base}.build.md`, text: serializeBuildIndex(model, raw) },
+    ...flows.map((flow) => ({
+      name: `${base}.${flow.id}.build.md`,
+      text: serializeBuildFlow(model, flow.id, raw),
+    })),
+  ];
+
+  files.forEach((file, index) => {
+    setTimeout(() => downloadText(file.text, file.name), index * 250);
+  });
+  toast(`Downloading ${files.length} build files — allow multiple downloads`);
 }
 
 async function copyText() {

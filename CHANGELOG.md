@@ -17,10 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   losing prose.
 - `context-preload editor` now serves the editor on a local HTTP URL and
   launches the browser from an interactive terminal; `--port` selects the port.
-- `context-preload build` writes `<name>.build.md`: includes merged, one linear
-  section per flow, globs preserved. The conventional `base` helper is not
-  emitted as its own section. The editor's **Build** button downloads the same
-  file, and the skill now reads only the build.
+- `context-preload build` writes an index plus one strict `<name>.<flow>.build.md`
+  per flow: includes merged, globs preserved, and a `STOP — end of flow` marker.
+  The conventional `base` helper gets no own file. The editor's **Build all**
+  button downloads the index and every flow file, and the skill now reads only
+  the index and the selected flow file.
 
 ### Removed
 

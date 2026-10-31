@@ -603,53 +603,81 @@ function uniqueBuildStrings(values: string[]): string[] {
 }
 
 /**
- * Render a model as a linear, self-contained build file: one section per flow,
- * includes already merged, globs preserved, skip/ignore collected.
+ * Flows that deserve their own build file. `base` is the conventional
+ * include-only helper: its content is merged into every flow that includes it,
+ * so it needs no standalone file.
  */
-export function serializeBuildFile(
+export function buildableFlows(model: Model): Flow[] {
+  const includedIds = new Set(model.flows.flatMap((flow) => flow.includes ?? []));
+  return model.flows.filter((flow) => !(flow.id === 'base' && includedIds.has('base')));
+}
+
+/** Render the index: flow ids and descriptions only, never file paths. */
+export function serializeBuildIndex(
   model: Model,
   sourceName = 'routing-context-flow.md',
 ): string {
   const out: string[] = [];
-  out.push(`# Built routing${model.meta.name ? ` — ${model.meta.name}` : ''}`);
+  out.push(`# Routing index${model.meta.name ? ` — ${model.meta.name}` : ''}`);
   out.push(`# Generated from ${sourceName}. Do not edit.`);
+  out.push('# Choose one flow, then read the corresponding <name>.<flow>.build.md.');
   out.push('');
 
-  if (!model.flows.length) {
+  const flows = buildableFlows(model);
+  if (!flows.length) {
     out.push('_No flows._');
     return `${out.join('\n').trimEnd()}\n`;
   }
 
-  const includedIds = new Set(model.flows.flatMap((flow) => flow.includes ?? []));
+  for (const flow of flows) {
+    const description = flow.description ? ` — ${flow.description}` : '';
+    out.push(`- \`${flow.id}\`${description}`);
+  }
+  return `${out.join('\n').trimEnd()}\n`;
+}
 
-  for (const flow of model.flows) {
-    // `base` is the conventional include-only helper: its content is already
-    // merged into every flow that includes it, so it needs no own section.
-    if (flow.id === 'base' && includedIds.has('base')) continue;
-
-    const merged = mergeBuildFlow(model, flow.id, []);
-    const read = uniqueBuildReads(merged.read);
-    const skip = uniqueBuildStrings([...(model.global?.ignore ?? []), ...merged.skip]);
-
-    out.push(`## ${flow.id}`);
-    if (flow.description) out.push(flow.description);
-    out.push('');
-    out.push('Read these paths, in order:');
-    out.push('');
-    if (read.length) {
-      read.forEach((entry, index) => out.push(`${index + 1}. \`${entry.path}\``));
-    } else {
-      out.push('_Nothing._');
-    }
-    out.push('');
-    if (skip.length) {
-      out.push('Do not read:');
-      out.push('');
-      for (const pattern of skip) out.push(`- \`${pattern}\``);
-      out.push('');
-    }
+/** Render one flow as a strict, self-contained build file. */
+export function serializeBuildFlow(
+  model: Model,
+  flowId: string,
+  sourceName = 'routing-context-flow.md',
+): string {
+  const flow = model.flows.find((item) => item.id === flowId);
+  if (!flow) {
+    return `# Built routing — ${flowId}\n# Flow not found in ${sourceName}.\n`;
   }
 
+  const merged = mergeBuildFlow(model, flow.id, []);
+  const read = uniqueBuildReads(merged.read);
+  const skip = uniqueBuildStrings([...(model.global?.ignore ?? []), ...merged.skip]);
+
+  const out: string[] = [];
+  out.push(
+    `# Built routing — ${flow.id}${model.meta.name ? ` — ${model.meta.name}` : ''}`,
+  );
+  out.push(`# Generated from ${sourceName}. Do not edit.`);
+  out.push(`# Read only this file for flow \`${flow.id}\`.`);
+  out.push('');
+  out.push(`## ${flow.id}`);
+  if (flow.description) out.push(flow.description);
+  out.push('');
+  out.push('Read these paths, in order:');
+  out.push('');
+  if (read.length) {
+    read.forEach((entry, index) => out.push(`${index + 1}. \`${entry.path}\``));
+  } else {
+    out.push('_Nothing._');
+  }
+  out.push('');
+  if (skip.length) {
+    out.push('Do not read:');
+    out.push('');
+    for (const pattern of skip) out.push(`- \`${pattern}\``);
+    out.push('');
+  }
+  out.push('---');
+  out.push(`STOP — end of flow \`${flow.id}\`. Do not read anything else.`);
+  out.push('---');
   return `${out.join('\n').trimEnd()}\n`;
 }
 

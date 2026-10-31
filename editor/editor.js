@@ -220,14 +220,14 @@ function rawTemplate() {
     <div class="panel-head">
       <div>
         <h2>Free text</h2>
-        <p>The skill reads this file as instructions. Structured flows are optional.</p>
+        <p>A draft. To build it and use it with the skill, add structured flows.</p>
       </div>
     </div>
     <div class="form-grid">
       <label class="field full">
         <span class="label">Routing file</span>
         <textarea id="raw-text" rows="26" spellcheck="false">${esc(state.rawText)}</textarea>
-        <small>Example: <code>When I am doing a review, read these files:</code> followed by the list. Switch to <b>Visual</b> when the file uses <code>## Flow:</code> sections.</small>
+        <small>Switch to <b>Visual</b> and add <code>## Flow:</code> sections to build it.</small>
       </label>
     </div>`;
 }
@@ -293,7 +293,7 @@ function renderPreview() {
 
   if (!issues.length) {
     $('#issues').innerHTML = state.raw
-      ? '<p class="muted">Free text: the skill interprets it directly. Use structured <code>## Flow:</code> sections if you want <code>context-preload validate</code> and glob expansion.</p>'
+      ? '<p class="muted">Free text is not buildable. Use structured <code>## Flow:</code> sections to generate the build and validate paths.</p>'
       : '<p class="muted">Valid structure. Paths are checked by <code>context-preload validate</code>.</p>';
     return;
   }
@@ -478,9 +478,19 @@ function downloadBuild() {
   }
   const raw = state.fileName.trim() || 'routing-context-flow.md';
   const base = raw.toLowerCase().endsWith('.md') ? raw.slice(0, -3) : raw;
-  const fileName = `${base}.build.md`;
-  downloadText(serializeBuildFile(model, raw), fileName);
-  toast(`Downloaded ${fileName}`);
+  const flows = buildableFlows(model);
+  const files = [
+    { name: `${base}.build.md`, text: serializeBuildIndex(model, raw) },
+    ...flows.map((flow) => ({
+      name: `${base}.${flow.id}.build.md`,
+      text: serializeBuildFlow(model, flow.id, raw),
+    })),
+  ];
+
+  files.forEach((file, index) => {
+    setTimeout(() => downloadText(file.text, file.name), index * 250);
+  });
+  toast(`Downloading ${files.length} build files — allow multiple downloads`);
 }
 
 async function copyText() {

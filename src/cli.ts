@@ -20,7 +20,12 @@ import process from 'node:process';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-import { parseFlowFile, serializeBuildFile } from './crf-core.ts';
+import {
+  buildableFlows,
+  parseFlowFile,
+  serializeBuildFlow,
+  serializeBuildIndex,
+} from './crf-core.ts';
 import { loadRoutingFile, resolveFlow } from './resolve.ts';
 import { STARTER_TEMPLATE } from './template.ts';
 import type { Issue, LoadedRoutingFile } from './types.ts';
@@ -205,12 +210,33 @@ function buildPath(file: string): string {
   return `${base}.build.md`;
 }
 
+function flowBuildPath(file: string, flowId: string): string {
+  const extension = path.extname(file);
+  const base = extension ? file.slice(0, -extension.length) : file;
+  return `${base}.${flowId}.build.md`;
+}
+
 function commandBuild() {
   const source = findRoutingFile(OPTIONS.file ?? POSITIONAL[0]);
   const loaded = load(source);
+  const sourceName = path.basename(source);
   const target = buildPath(source);
-  fs.writeFileSync(target, serializeBuildFile(loaded.model, path.basename(source)), 'utf8');
-  out(`${green('✔')} built ${bold(displayPath(target))}`);
+
+  fs.writeFileSync(target, serializeBuildIndex(loaded.model, sourceName), 'utf8');
+  const flows = buildableFlows(loaded.model);
+  for (const flow of flows) {
+    fs.writeFileSync(
+      flowBuildPath(source, flow.id),
+      serializeBuildFlow(loaded.model, flow.id, sourceName),
+      'utf8',
+    );
+  }
+
+  out(
+    `${green('✔')} built ${bold(displayPath(target))} ${dim(
+      `(${flows.length} flow file${flows.length === 1 ? '' : 's'})`,
+    )}`,
+  );
 }
 
 function commandInit() {
@@ -402,7 +428,7 @@ ${bold('Usage')}
 ${bold('Commands')}
   list [file]                List flows in the routing file
   validate [file]            Check the file, its paths and its includes
-  build [file]               Write <name>.build.md for the skill
+  build [file]               Write the index and one build file per flow
   init [file]                Create a starter routing-context-flow.md
   editor [file]              Serve the visual editor and print a local URL
 

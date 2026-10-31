@@ -41,4 +41,4 @@ jobs:
         if: matrix.node == 22
         run: |
           npm run build:routing
-          git diff --exit-code -- routing-context-flow.build.md
+          git diff --exit-code -- 'routing-context-flow*.build.md'

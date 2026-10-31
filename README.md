@@ -63,25 +63,42 @@ In the repository you want to route:
 context-preload init              # creates a starter routing-context-flow.md
 context-preload list              # shows the flows
 context-preload validate          # checks structure and paths
-context-preload build             # writes routing-context-flow.build.md
+context-preload build             # writes routing-context-flow.build.md + flow files
 ```
 
 No runtime dependencies, no build step for the CLI. Node.js >= 22.18 (native
 TypeScript type stripping).
 
-This repository ships its own [`routing-context-flow.md`](routing-context-flow.md)
-and the generated [`routing-context-flow.build.md`](routing-context-flow.build.md),
-so right after cloning you can run `context-preload list` and see the router
-applied to itself.
+This repository ships its own [`routing-context-flow.md`](routing-context-flow.md),
+the generated [`routing-context-flow.build.md`](routing-context-flow.build.md)
+index and one `routing-context-flow.<flow>.build.md` per flow, so right after
+cloning you can run `context-preload list` and see the router applied to itself.
 
 ## What the build file looks like
 
-`context-preload build` merges the includes and writes one linear block per
-flow:
+`context-preload build` writes an index plus one strict file per flow:
+
+```text
+routing-context-flow.build.md          # index: ids + descriptions, no paths
+routing-context-flow.review.build.md   # only review
+routing-context-flow.coding.build.md   # only coding
+```
+
+The index:
 
 ```markdown
-# Built routing — my-project
+# Routing index — my-project
 # Generated from routing-context-flow.md. Do not edit.
+
+- `review` — Review a change without rewriting it.
+- `coding` — Implement a feature or a fix.
+```
+
+A flow file:
+
+```markdown
+# Built routing — review — my-project
+# Read only this file for flow `review`.
 
 ## review
 Review a change without rewriting it.
@@ -98,19 +115,14 @@ Do not read:
 - `tests/fixtures/**`
 - `node_modules/**`
 
-## coding
-Implement a feature or a fix.
-
-Read these paths, in order:
-
-1. `docs/language.md`
-2. `src/core/**/*.ts`
-3. `src/**/*.ts`
+---
+STOP — end of flow `review`. Do not read anything else.
+---
 ```
 
-The skill reads this file, picks the flow and follows the order. It never reads
-the master. If the build is missing, the skill stops and asks you to run
-`context-preload build`.
+The skill reads the index, chooses a flow and reads **only** that flow file. The
+other flows are not in context. If the index or the flow file is missing, the
+skill stops and asks you to run `context-preload build`.
 
 ## Choosing a flow
 
@@ -136,7 +148,8 @@ docs/routing-context-flow.backend.md
 ```bash
 context-preload validate --file docs/routing-context-flow.backend.md
 context-preload build --file docs/routing-context-flow.backend.md
-# → docs/routing-context-flow.backend.build.md
+# → docs/routing-context-flow.backend.build.md (index)
+# → docs/routing-context-flow.backend.<flow>.build.md (per flow)
 ```
 
 Boring on purpose: no global state, no cache, no daemon. One file, read every
@@ -147,7 +160,22 @@ time.
 `editor/index.html` is a single, offline page: forms for global paths and
 flows, a free-text mode for prose routing files, live canonical Markdown
 preview, structural validation, import by file or drag & drop, download, copy,
-a **Build** button that downloads `<name>.build.md`, and a local autosave draft.
+a **Build all** button that downloads the index and one `<name>.<flow>.build.md`
+per flow, and a local autosave draft.
+
+### Screenshots
+
+**Global view** — ignore, read order and shared settings.
+
+<img src="docs/editor-global.png" alt="Editor — Global view" width="900">
+
+**Flow view** — the fields of a single flow and the live canonical preview.
+
+<img src="docs/editor-flow.png" alt="Editor — Flow view" width="900">
+
+**Raw mode** — plain Markdown for free-text drafts.
+
+<img src="docs/editor-raw.png" alt="Editor — Raw mode" width="900">
 
 ```bash
 context-preload editor                               # serves the blank editor
@@ -198,7 +226,7 @@ master.
 | --- | --- |
 | `context-preload list [file]` | List flows and includes. |
 | `context-preload validate [file]` | Check syntax, ids, includes, cycles and paths. |
-| `context-preload build [file]` | Write `<name>.build.md` with includes merged. |
+| `context-preload build [file]` | Write the index and one file per flow, includes merged. |
 | `context-preload init [file]` | Write a starter routing file. |
 | `context-preload editor [file]` | Serve the visual editor, optionally with a routing file. |
 
