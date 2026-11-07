@@ -1,6 +1,6 @@
 {
   "name": "context-preload-skill",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Route what an AI agent reads: declare flows in routing-context-flow.md and load only the files each task needs.",
   "type": "module",
   "bin": {

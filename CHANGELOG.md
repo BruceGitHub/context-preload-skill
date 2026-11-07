@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-11-07
+
 ### Added
 
 - Free-text routing files: a routing file can be plain prose, and the skill
@@ -22,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The conventional `base` helper gets no own file. The editor's **Build all**
   button downloads the index and every flow file, and the skill now reads only
   the index and the selected flow file.
+- A **Use cases** section in the README: external-facing documents, writing
+  style per register, operating profiles, composition with domain skills.
 
 ### Removed
 
@@ -69,5 +73,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Test suite with `node:test` (core, glob, resolver, CLI) and GitHub Actions
   CI on Node 20 and 22.
 
-[Unreleased]: https://github.com/BruceGitHub/context-preload-skill/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/BruceGitHub/context-preload-skill/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/BruceGitHub/context-preload-skill/releases/tag/v0.2.0
 [0.1.0]: https://github.com/BruceGitHub/context-preload-skill/releases/tag/v0.1.0
