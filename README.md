@@ -155,6 +155,104 @@ context-preload build --file docs/routing-context-flow.backend.md
 Boring on purpose: no global state, no cache, no daemon. One file, read every
 time.
 
+## Use cases
+
+A flow is a **context profile**: it decides what the agent knows before it
+starts and, through that, how it writes. Nothing ties it to source code, and the
+same repository can carry several profiles side by side.
+
+### Write for a reader outside the repo
+
+A document for a client, a vendor or an end user must not cite internal ADRs,
+tickets or paths the reader cannot open. Give it its own flow:
+
+```markdown
+## Flow: public-doc
+
+- description: Write a document an external reader can follow on its own.
+- read:
+  - `docs/product/overview.md`  | the product in plain terms
+  - `docs/style/external.md`    | tone, structure, vocabulary
+  - `docs/api/public/**/*.md`   | what the reader is allowed to know
+- skip:
+  - `docs/api/public/drafts/**`
+```
+
+Nothing internal is listed, so nothing internal is read; `skip` only subtracts
+what a broad glob would otherwise catch. The prompt carries the soft rule that
+context cannot express ("no internal links, no ticket ids"), and the flow makes
+sure the model has nothing private to quote in the first place.
+
+### Set the writing style by task
+
+Style is context too. Keep one guide per register and route the right one,
+instead of restating the tone in every prompt:
+
+| Task | Flow | Reads |
+| --- | --- | --- |
+| API reference | `docs-technical` | `docs/style/technical.md`, `docs/api/**/*.md` |
+| Proposal or report | `docs-business` | `docs/style/business.md`, `docs/pricing.md` |
+| Customer reply | `support` | `docs/style/support.md`, `docs/known-issues.md`, `docs/sla.md` |
+
+Put the style guide first in `read`: it is the contract for the task, exactly
+like a spec is for coding. `Global → read order` can reinforce it ("style guide
+first, then facts").
+
+### Configure an operating profile
+
+Some work needs the same few references every time: a security review, a
+migration, an incident. Write that setup once and invoke it by name:
+
+```markdown
+## Flow: sec-review
+
+- description: Security review of a change.
+- includes: base
+- read:
+  - `docs/security/threat-model.md` | assets and trust boundaries
+  - `docs/security/checklist.md`    | what we always check
+  - `src/auth/**/*.ts`              | the surface under review
+  - `src/api/middleware/**/*.ts`
+- skip:
+  - `**/*.test.ts`
+```
+
+> do a security review of the login refactor using **context-preload**, flow `sec-review`
+
+The checklist and the trust boundaries are loaded before the code, from the
+same source, every time. Changing the profile is a reviewable commit, not a
+change to someone's memory of which prompt to write.
+
+### Compose with other skills
+
+`context-preload` does not compete with task skills. A security, writing or
+design skill knows *how* to do the work; a flow decides *what it sees*. Use them
+in the same request:
+
+> audit the upload handler with the **security-audit** skill, using
+> **context-preload** flow `sec-review`
+
+A request loads one flow plus what it `includes`, so share common ground through
+a `base` flow instead of copying paths: `sec-review`, `sec-threat-model` and
+`sec-incident` can all include `sec-base` and stay independent.
+
+### More flows worth writing
+
+| Situation | The flow loads | And leaves out |
+| --- | --- | --- |
+| Onboarding a new developer | architecture overview, glossary, runbook | history, vendored code |
+| Incident or post-mortem | runbooks, dashboards, logs, recent changes | the rest of the codebase |
+| Migration or upgrade | lockfiles, changelogs, compatibility notes, call sites | marketing docs |
+| Compliance or audit | policies, data map, auth and logging code | UI |
+| Translation | source strings, glossary, tone guide | implementation |
+| Teaching or a workshop | glossary, examples, exercises | internals |
+| A client engagement | brief, deliverable templates, public docs | other clients, internal ADRs |
+
+Two things keep these honest. A flow shapes what the agent reads; it does not
+enforce a policy on its own, so keep an explicit instruction for hard rules. And
+the routing file is versioned: its diff is the record of how the setup for a
+task changed.
+
 ## Visual editor
 
 `editor/index.html` is a single, offline page: forms for global paths and
